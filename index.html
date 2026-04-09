@@ -1212,22 +1212,50 @@ function setConnected(ok){
 
 async function inicializarSheets(){
   try{
-    const checks=[
-      {range:'Base Datos!A1',header:[['ID_ZKteco','Nombre','Apellidos','Cedula','Puesto','Departamento','Cuenta','Hora_Base','Fijo_Semanal','CCSS','Tipo_Pago','Nota']]},
-      {range:'Horarios!A1',header:[['Semana','Lun','Mar','Mié','Jue','Vie','Sáb','Dom']]},
-      {range:'Registro Semanal!A1',header:[['Semana','ID','Empleado','Cuenta','Neto','CCSS','Bruto']]},
-      {range:'Transferencias!A1',header:[['Semana','Empleado','Cuenta','Monto','Tipo','Concepto']]},
-    ];
-    for(const c of checks){
-      const existing=await sheetsGet(c.range);
-      const val=(existing.values||[])[0]||[];
-      if(!val.length){
-        await sheetsWrite(c.range,c.header);
+    const sheetNames=['Base Datos','Horarios','Registro Semanal','Transferencias'];
+    const headers={
+      'Base Datos':[['ID_ZKteco','Nombre','Apellidos','Cedula','Puesto','Departamento','Cuenta','Hora_Base','Fijo_Semanal','CCSS','Tipo_Pago','Nota']],
+      'Horarios':[['Semana','Lun','Mar','Mié','Jue','Vie','Sáb','Dom']],
+      'Registro Semanal':[['Semana','ID','Empleado','Cuenta','Neto','CCSS','Bruto']],
+      'Transferencias':[['Semana','Empleado','Cuenta','Monto','Tipo','Concepto']],
+    };
+
+    // Primero verificamos qué hojas ya existen
+    const metaResp = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}?fields=sheets.properties.title`,
+      {headers:{Authorization:'Bearer '+accessToken}}
+    );
+    const meta = await metaResp.json();
+    const existingSheets = (meta.sheets||[]).map(s=>s.properties.title);
+
+    // Creamos las hojas que faltan en una sola operación batch
+    const sheetsToCreate = sheetNames.filter(n=>!existingSheets.includes(n));
+    if(sheetsToCreate.length){
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}:batchUpdate`,{
+        method:'POST',
+        headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},
+        body:JSON.stringify({requests:sheetsToCreate.map(title=>({addSheet:{properties:{title}}}))})
+      });
+    }
+
+    // Ahora escribimos los encabezados en las hojas que estaban vacías
+    for(const name of sheetNames){
+      if(!existingSheets.includes(name)){
+        await sheetsWrite(`${name}!A1`, headers[name]);
+      } else {
+        // Ya existía, verificamos si tiene encabezado
+        try{
+          const existing = await sheetsGet(`${name}!A1`);
+          const val = (existing.values||[])[0]||[];
+          if(!val.length) await sheetsWrite(`${name}!A1`, headers[name]);
+        }catch(e){
+          await sheetsWrite(`${name}!A1`, headers[name]);
+        }
       }
     }
-    console.log('Hojas inicializadas correctamente');
+    console.log('Sheets inicializadas correctamente');
   }catch(e){
-    console.warn('No se pudieron inicializar hojas:',e.message);
+    console.warn('Error inicializando sheets:',e.message);
   }
 }
 
