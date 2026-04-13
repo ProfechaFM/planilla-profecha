@@ -163,6 +163,7 @@ tr:hover td{background:var(--bg)}
     <div class="abar">
       <button class="btn btn-p" onclick="calcularPago()">Calcular planilla</button>
       <button class="btn btn-s" onclick="guardarHorario()">Guardar en Sheets</button>
+      <button class="btn btn-s" onclick="cargarHorarioDesdeSheets()">Cargar desde Sheets</button>
       <button class="btn btn-d" onclick="limpiarHorarioSemana()">Limpiar semana</button>
     </div>
   </div>
@@ -544,7 +545,7 @@ tr:hover td{background:var(--bg)}
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
 const CLIENT_ID='208106774559-e48u19274onhe0fsc47kqh9ki4q5kosg.apps.googleusercontent.com';
-const SCOPES='https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file';
+const SCOPES='https://www.googleapis.com/auth/spreadsheets';
 const DENOMS=[20000,10000,5000,2000,1000,500];
 const DENOM_LABELS={'20000':'₡20.000','10000':'₡10.000','5000':'₡5.000','2000':'₡2.000','1000':'₡1.000','500':'₡500 (moneda)'};
 const DENOM_TYPE={'20000':'billete','10000':'billete','5000':'billete','2000':'billete','1000':'billete','500':'moneda'};
@@ -878,7 +879,7 @@ function calcularPago(){
   empIds.forEach(empId=>{
     const emp=empleados.find(e=>e.id===empId);
     const eh=wData[empId]||{};
-    let hNorm=0,hExtra=0,hDoble=0,hExtraDoble=0;
+    let hNorm=0,hExtra=0,hDoble=0,hExtraDoble=0,hFeriadoBase=0;
 
     for(let d=0;d<7;d++){
       const dd=eh['d'+d];
@@ -886,8 +887,11 @@ function calcularPago(){
       const h=dd.salida-dd.entrada;
       if(h<=0)continue;
       if(feriados[d]){
-        hDoble+=Math.min(h,8);
-        hExtraDoble+=Math.max(0,h-8);
+        const doblesDia=Math.min(h,8);
+        const extrasDobleDia=Math.max(0,h-8);
+        hDoble+=doblesDia;
+        hExtraDoble+=extrasDobleDia;
+        hFeriadoBase+=doblesDia;
       } else if(!cfg.extrasAcumulativas){
         hNorm+=Math.min(h,8);
         hExtra+=Math.max(0,h-8);
@@ -897,7 +901,7 @@ function calcularPago(){
     }
 
     if(cfg.extrasAcumulativas){
-      const LIMITE=48;
+      const LIMITE=Math.max(0,48-hFeriadoBase);
       const exceso=Math.max(0,hNorm-LIMITE);
       hExtra=exceso;
       hNorm=Math.min(hNorm,LIMITE);
@@ -922,11 +926,13 @@ function calcularPago(){
 
     let netoEf=0,netoTr=0,rebajoCCSplit=0;
     if(isSplit){
-      const baseNorm=(hNorm*hBase)+descTotal+fijo;
-      const baseExtras=(hExtra*hBase*cfg.extra)+(hDoble*hBase*cfg.doble)+(hExtraDoble*hBase*cfg.extraDoble);
-      rebajoCCSplit=ccssX?baseNorm*(cfg.ccss/100):0;
-      netoTr=baseNorm-rebajoCCSplit;
-      netoEf=baseExtras;
+      // Transfer: normales + dobles feriado (primeras 8h/día feriado)
+      // Efectivo: extras + extra dobles (exceso 8h en feriado)
+      const baseTransfer=(hNorm*hBase)+(hDoble*hBase*cfg.doble)+descTotal+fijo;
+      const baseEfectivo=(hExtra*hBase*cfg.extra)+(hExtraDoble*hBase*cfg.extraDoble);
+      rebajoCCSplit=ccssX?baseTransfer*(cfg.ccss/100):0;
+      netoTr=baseTransfer-rebajoCCSplit;
+      netoEf=baseEfectivo;
     }else if(emp.pago==='transferencia'){netoTr=neto;}
     else{netoEf=neto;}
     const rebajoEfectivo=isSplit?rebajoCCSplit:rebajoCC;
@@ -1337,10 +1343,38 @@ async function autoGuardarHorario(){
   }
 }
 
+async function buscarRangoSemana(hoja, etiqueta){
+  try{
+    const d=await sheetsGet(`${hoja}!A1:A500`);
+    const rows=d.values||[];
+    for(let i=0;i<rows.length;i++){
+      if(rows[i][0]&&rows[i][0].includes(etiqueta)){
+        // Encontramos el encabezado, buscamos hasta la fila vacía
+        let fin=i+1;
+        while(fin<rows.length&&rows[fin]&&rows[fin][0])fin++;
+        return {inicio:i+1,fin:fin+1}; // 1-based para Sheets
+      }
+    }
+    return null;
+  }catch(e){return null;}
+}
+
+async function sobreescribirOAgregar(hoja, etiqueta, header, rows){
+  const rango=await buscarRangoSemana(hoja, etiqueta);
+  if(rango){
+    // Borrar el bloque existente y escribir el nuevo
+    await sheetsReq('POST',`/values/${encodeURIComponent(hoja+'!A'+rango.inicio+':Z'+rango.fin)}:clear`,null);
+    await sheetsWrite(`${hoja}!A${rango.inicio}`, [header,...rows,['']]);
+  } else {
+    await sheetsAppend(`${hoja}!A1`,[header,...rows,['']]);
+  }
+}
+
 async function guardarHorario(){
   if(!accessToken){alert('Conectate primero en Configuración');return;}
   const wk=weekKey();const wData=horarioActual[wk]||{};
-  const header=[`Semana: ${weekLabel()}`,...DAYS.map((d,i)=>feriados[i]?d+' FERIADO':d),'','','','','','',''];
+  const etiqueta=weekLabel();
+  const header=[`Semana: ${etiqueta}`,...DAYS.map((d,i)=>feriados[i]?d+' FERIADO':d),'','','','','','',''];
   const rows=Object.keys(wData).filter(k=>!k.endsWith('_fer')).map(empId=>{
     const eh=wData[empId];const emp=empleados.find(e=>e.id===empId);
     const row=[empId,emp?emp.nombre:(eh.nombre||'')];
@@ -1348,7 +1382,7 @@ async function guardarHorario(){
     return row;
   });
   try{
-    await sheetsAppend('Horarios!A1',[header,...rows,['']]);
+    await sobreescribirOAgregar('Horarios',etiqueta,header,rows);
     horarioPendiente=false;
     actualizarIndicadorGuardado();
     alert('Horario guardado en Sheets');
@@ -1358,10 +1392,13 @@ async function guardarHorario(){
 async function guardarRegistro(){
   if(!accessToken){alert('Conectate primero');return;}
   if(!resultados.length){alert('Calculá primero');return;}
-  const header=[`Semana del ${weekLabel()}`,'','','','',''];
+  const etiqueta=weekLabel();
+  const header=[`Semana del ${etiqueta}`,'','','','',''];
   const rows=resultados.filter(r=>!r.sinPerfil).map(r=>[r.empId,r.nombre,r.emp.cuenta||'N/A',Math.round(r.neto),Math.round(r.rebajoCC),Math.round(r.bruto)]);
-  try{await sheetsAppend('Registro Semanal!A1',[header,...rows,['']]);alert('Registro guardado');}
-  catch(e){alert('Error: '+e.message);}
+  try{
+    await sobreescribirOAgregar('Registro Semanal',etiqueta,header,rows);
+    alert('Registro guardado');
+  }catch(e){alert('Error: '+e.message);}
 }
 
 async function guardarTransferencias(){
@@ -1369,10 +1406,58 @@ async function guardarTransferencias(){
   if(!resultados.length){alert('Calculá primero');return;}
   const trItems=resultados.filter(r=>r.netoTr>0&&!r.sinPerfil);
   if(!trItems.length){alert('Sin transferencias');return;}
-  const header=[`Transferencias ${weekLabel()}`,'','','',''];
-  const rows=trItems.map(r=>[r.nombre,r.emp.cuenta||'',Math.round(r.netoTr),r.isSplit?'Horas normales (split)':'Salario completo',`Planilla al ${fmtDate(addDays(currentWeekStart,6))}`]);
-  try{await sheetsAppend('Transferencias!A1',[header,...rows,['']]);alert('Guardado');}
-  catch(e){alert('Error: '+e.message);}
+  const etiqueta=weekLabel();
+  const header=[`Transferencias ${etiqueta}`,'','','',''];
+  const rows=trItems.map(r=>[r.nombre,r.emp.cuenta||'',Math.round(r.netoTr),r.isSplit?'Horas normales + dobles (split)':'Salario completo',`Planilla al ${fmtDate(addDays(currentWeekStart,6))}`]);
+  try{
+    await sobreescribirOAgregar('Transferencias',etiqueta,header,rows);
+    alert('Transferencias guardadas');
+  }catch(e){alert('Error: '+e.message);}
+}
+
+async function cargarHorarioDesdeSheets(){
+  if(!accessToken){alert('Conectate primero en Configuración');return;}
+  const etiqueta=weekLabel();
+  try{
+    const d=await sheetsGet('Horarios!A1:R500');
+    const rows=d.values||[];
+    let bloqueInicio=-1;
+    for(let i=0;i<rows.length;i++){
+      if(rows[i][0]&&rows[i][0].includes(etiqueta)){bloqueInicio=i;break;}
+    }
+    if(bloqueInicio<0){alert(`No hay horario guardado en Sheets para la semana del ${etiqueta}.`);return;}
+
+    // Detectar feriados del encabezado
+    const hdrRow=rows[bloqueInicio];
+    const ferCargados=[false,false,false,false,false,false,false];
+    for(let d=0;d<7;d++){
+      if(hdrRow[d+1]&&hdrRow[d+1].includes('FERIADO'))ferCargados[d]=true;
+    }
+    feriados=ferCargados;
+    horarioActual[weekKey()+'_fer']=[...feriados];
+
+    // Cargar horas de cada empleado
+    const wk=weekKey();
+    horarioActual[wk]={};
+    for(let i=bloqueInicio+1;i<rows.length;i++){
+      const row=rows[i];
+      if(!row||!row[0])break;
+      const empId=String(row[0]);
+      const nombre=row[1]||'';
+      horarioActual[wk][empId]={nombre};
+      for(let d=0;d<7;d++){
+        const entVal=row[2+d*2];
+        const salVal=row[3+d*2];
+        const entrada=entVal!==undefined&&entVal!==''?parseFloat(entVal):null;
+        const salida=salVal!==undefined&&salVal!==''?parseFloat(salVal):null;
+        horarioActual[wk][empId]['d'+d]={entrada,salida};
+      }
+    }
+    horarioPendiente=false;
+    actualizarIndicadorGuardado();
+    renderSchedule();
+    alert(`Horario de la semana del ${etiqueta} cargado desde Sheets.`);
+  }catch(e){alert('Error cargando horario: '+e.message);}
 }
 
 function copiarCSV(){
