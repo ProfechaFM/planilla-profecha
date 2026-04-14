@@ -572,7 +572,28 @@ function fmtDate(d){return d.toLocaleDateString('es-CR',{day:'2-digit',month:'sh
 function fmtMon(n){return '₡'+Math.round(n).toLocaleString('es-CR');}
 function weekKey(){return currentWeekStart.toISOString().split('T')[0];}
 function weekLabel(){return fmtDate(currentWeekStart)+' — '+fmtDate(addDays(currentWeekStart,6));}
-function parseHour(s){if(!s)return null;const p=s.toString().split(':');if(p.length===2)return parseFloat(p[0])+parseFloat(p[1])/60;return parseFloat(s);}
+function parseHour(s){
+  if(!s&&s!==0)return null;
+  const str=String(s).trim().replace(',','.');
+  const p=str.split(':');
+  if(p.length===2)return parseFloat(p[0])+parseFloat(p[1])/60;
+  const n=parseFloat(str);
+  return isNaN(n)?null:n;
+}
+
+function parseNum(s){
+  if(s===null||s===undefined||s==='')return 0;
+  // Handle both "1748.98" and "1.748,98" and "1748,98"
+  let str=String(s).trim();
+  // If has both . and , — European format: 1.748,98
+  if(str.includes('.')&&str.includes(',')){
+    str=str.replace(/\./g,'').replace(',','.');
+  } else {
+    str=str.replace(',','.');
+  }
+  const n=parseFloat(str);
+  return isNaN(n)?0:n;
+}
 
 function nav(id,el){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -1094,11 +1115,11 @@ function renderComprobantes(){
     <div class="comprobante" data-empid="${r.empId}">
       <div class="comp-title">RESTAURANTE LA FIESTA DE MAÍZ (PROFECHA)</div>
       <div class="comp-sub">Comprobante de pago — Semana del ${sem}<br><strong>${r.nombre}</strong> · ${r.emp.puesto||''}${r.emp.ccss==='X'?' · Asegurado CCSS':''}</div>
-      ${r.hNorm>0?`<div class="comp-row"><span>Horas normales (${r.hNorm.toFixed(2)} h × ${fmtMon(parseFloat(r.emp.horaBase))})</span><span>${fmtMon(r.hNorm*parseFloat(r.emp.horaBase))}</span></div>`:''}
-      ${r.hExtra>0?`<div class="comp-row"><span>Horas extra (${r.hExtra.toFixed(2)} h × ${fmtMon(parseFloat(r.emp.horaBase)*cfg.extra)})</span><span>${fmtMon(r.hExtra*parseFloat(r.emp.horaBase)*cfg.extra)}</span></div>`:''}
-      ${r.hDoble>0?`<div class="comp-row"><span>Horas dobles/feriado (${r.hDoble.toFixed(2)} h × ${fmtMon(parseFloat(r.emp.horaBase)*cfg.doble)})</span><span>${fmtMon(r.hDoble*parseFloat(r.emp.horaBase)*cfg.doble)}</span></div>`:''}
-      ${r.hExtraDoble>0?`<div class="comp-row" style="color:var(--danger)"><span>Horas extra dobles/feriado (${r.hExtraDoble.toFixed(2)} h × ${fmtMon(parseFloat(r.emp.horaBase)*cfg.extraDoble)})</span><span>${fmtMon(r.hExtraDoble*parseFloat(r.emp.horaBase)*cfg.extraDoble)}</span></div>`:''}
-      ${r.descTotal>0?`<div class="comp-row"><span>Porción de descanso (${(r.isSplit?(r.hNorm+r.hDoble):(r.hNorm+r.hExtra+r.hDoble+r.hExtraDoble)).toFixed(2)} h × ${fmtMon(parseFloat(r.emp.horaBase)*(cfg.descH/cfg.descD))})</span><span>${fmtMon(r.descTotal)}</span></div>`:''}
+      ${r.hNorm>0?`<div class="comp-row"><span>Horas normales (${r.hNorm.toFixed(2)} h × ${fmtMon(r.emp.horaBase)})</span><span>${fmtMon(r.hNorm*r.emp.horaBase)}</span></div>`:''}
+      ${r.hExtra>0?`<div class="comp-row"><span>Horas extra (${r.hExtra.toFixed(2)} h × ${fmtMon(r.emp.horaBase*cfg.extra)})</span><span>${fmtMon(r.hExtra*r.emp.horaBase*cfg.extra)}</span></div>`:''}
+      ${r.hDoble>0?`<div class="comp-row"><span>Horas dobles/feriado (${r.hDoble.toFixed(2)} h × ${fmtMon(r.emp.horaBase*cfg.doble)})</span><span>${fmtMon(r.hDoble*r.emp.horaBase*cfg.doble)}</span></div>`:''}
+      ${r.hExtraDoble>0?`<div class="comp-row" style="color:var(--danger)"><span>Horas extra dobles/feriado (${r.hExtraDoble.toFixed(2)} h × ${fmtMon(r.emp.horaBase*cfg.extraDoble)})</span><span>${fmtMon(r.hExtraDoble*r.emp.horaBase*cfg.extraDoble)}</span></div>`:''}
+      ${r.descTotal>0?`<div class="comp-row"><span>Porción de descanso (${(r.isSplit?(r.hNorm+r.hDoble):(r.hNorm+r.hExtra+r.hDoble+r.hExtraDoble)).toFixed(2)} h × ${fmtMon(r.emp.horaBase*(cfg.descH/cfg.descD))})</span><span>${fmtMon(r.descTotal)}</span></div>`:''}
       ${r.fijo>0?`<div class="comp-row"><span>Salario fijo / adicional</span><span>${fmtMon(r.fijo)}</span></div>`:''}
       <div class="comp-row" style="font-weight:600"><span>Salario bruto</span><span>${fmtMon(r.bruto)}</span></div>
       ${r.rebajoCC>0?`<div class="comp-row" style="color:var(--danger)"><span>Rebajo CCSS (${cfg.ccss}%)${r.isSplit?' — solo sobre horas normales':''}</span><span>-${fmtMon(r.rebajoCC)}</span></div>`:''}
@@ -1126,7 +1147,7 @@ function processEmpFile(file){
         const nombre=String(row[1]).trim().toUpperCase();
         if(!empId||!nombre){skipped++;return;}
         const existing=empleados.findIndex(e=>e.id===empId);
-        const emp={id:empId,nombre,cedula:String(row[2]||'').trim(),puesto:String(row[3]||'').trim().toUpperCase(),cuenta:String(row[4]||'N/A').trim(),horaBase:parseFloat(row[5])||0,fijo:parseFloat(row[6])||0,ccss:String(row[7]||'').trim().toUpperCase(),pago:String(row[8]||'efectivo').trim().toLowerCase(),nota:String(row[9]||'').trim().toLowerCase()};
+        const emp={id:empId,nombre,cedula:String(row[2]||'').trim(),puesto:String(row[3]||'').trim().toUpperCase(),cuenta:String(row[4]||'N/A').trim(),horaBase:parseNum(row[5]),fijo:parseNum(row[6]),ccss:String(row[7]||'').trim().toUpperCase(),pago:String(row[8]||'efectivo').trim().toLowerCase(),nota:String(row[9]||'').trim().toLowerCase()};
         if(existing>=0)empleados[existing]=emp;else empleados.push(emp);
         imported++;
       });
@@ -1301,7 +1322,7 @@ async function loadEmpleados(){
   try{
     const d=await sheetsGet('Base Datos!A2:J200');
     const rows=(d.values||[]).filter(r=>r[0]&&r[1]);
-    empleados=rows.map(r=>({id:String(r[0]),nombre:String(r[1]),cedula:r[2]||'',puesto:r[3]||'',cuenta:r[4]||'N/A',horaBase:parseFloat(r[5])||0,fijo:parseFloat(r[6])||0,ccss:r[7]||'',pago:r[8]||'efectivo',nota:r[9]||''}));
+    empleados=rows.map(r=>({id:String(r[0]),nombre:String(r[1]),cedula:r[2]||'',puesto:r[3]||'',cuenta:r[4]||'N/A',horaBase:parseNum(r[5]),fijo:parseNum(r[6]),ccss:r[7]||'',pago:r[8]||'efectivo',nota:r[9]||''}));
     renderEmpTable();renderSchedule();
     alert('Empleados cargados: '+empleados.length);
   }catch(e){alert('Error: '+e.message);}
