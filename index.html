@@ -583,13 +583,17 @@ function parseHour(s){
 
 function parseNum(s){
   if(s===null||s===undefined||s==='')return 0;
-  // Handle both "1748.98" and "1.748,98" and "1748,98"
+  if(typeof s==='number')return s;
   let str=String(s).trim();
-  // If has both . and , — European format: 1.748,98
-  if(str.includes('.')&&str.includes(',')){
+  if(str.includes(',')&&str.includes('.')){
     str=str.replace(/\./g,'').replace(',','.');
-  } else {
-    str=str.replace(',','.');
+  } else if(str.includes(',')&&!str.includes('.')){
+    const parts=str.split(',');
+    if(parts.length===2&&parts[1].length<=2){
+      str=str.replace(',','.');
+    } else {
+      str=str.replace(/,/g,'');
+    }
   }
   const n=parseFloat(str);
   return isNaN(n)?0:n;
