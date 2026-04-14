@@ -1378,7 +1378,11 @@ async function guardarHorario(){
   const rows=Object.keys(wData).filter(k=>!k.endsWith('_fer')).map(empId=>{
     const eh=wData[empId];const emp=empleados.find(e=>e.id===empId);
     const row=[empId,emp?emp.nombre:(eh.nombre||'')];
-    for(let d=0;d<7;d++){row.push((eh['d'+d]||{}).entrada!=null?(eh['d'+d]||{}).entrada:'');row.push((eh['d'+d]||{}).salida!=null?(eh['d'+d]||{}).salida:'');}
+    for(let d=0;d<7;d++){
+      const dd=eh['d'+d]||{};
+      row.push(dd.entrada!=null?Math.round(dd.entrada*10000)/10000:'');
+      row.push(dd.salida!=null?Math.round(dd.salida*10000)/10000:'');
+    }
     return row;
   });
   try{
@@ -1446,11 +1450,15 @@ async function cargarHorarioDesdeSheets(){
       const nombre=row[1]||'';
       horarioActual[wk][empId]={nombre};
       for(let d=0;d<7;d++){
+      for(let d=0;d<7;d++){
         const entVal=row[2+d*2];
         const salVal=row[3+d*2];
-        const entrada=entVal!==undefined&&entVal!==''?parseFloat(entVal):null;
-        const salida=salVal!==undefined&&salVal!==''?parseFloat(salVal):null;
-        horarioActual[wk][empId]['d'+d]={entrada,salida};
+        const entrada=entVal!==undefined&&entVal!==''?parseHour(entVal):null;
+        const salida=salVal!==undefined&&salVal!==''?parseHour(salVal):null;
+        if(entrada!==null||salida!==null){
+          horarioActual[wk][empId]['d'+d]={entrada,salida};
+        }
+      }
       }
     }
     horarioPendiente=false;
