@@ -917,7 +917,9 @@ function calcularPago(){
     const ccssX=emp.ccss==='X';
     const isSplit=emp.nota==='split';
     const descUnit=ccssX?hBase*(cfg.descH/cfg.descD):0;
-    const hTotalDesc=hNorm+hExtra+hDoble+hExtraDoble;
+    // Para split: descanso solo sobre normales y dobles (las que tienen CCSS)
+    // Para el resto: descanso sobre todas las horas
+    const hTotalDesc=isSplit?(hNorm+hDoble):(hNorm+hExtra+hDoble+hExtraDoble);
     const descTotal=hTotalDesc*descUnit;
     let bruto=hBase>0
       ?(hNorm*hBase)+(hExtra*hBase*cfg.extra)+(hDoble*hBase*cfg.doble)+(hExtraDoble*hBase*cfg.extraDoble)+descTotal+fijo
@@ -927,12 +929,10 @@ function calcularPago(){
 
     let netoEf=0,netoTr=0,rebajoCCSplit=0;
     if(isSplit){
-      // Transfer: normales + dobles feriado (primeras 8h/día feriado) + porción descanso de esas horas
-      // Efectivo: extras + extra dobles (exceso 8h en feriado) + su porción descanso
-      const descTransfer=(hNorm+hDoble)*descUnit;
-      const descEfectivo=(hExtra+hExtraDoble)*descUnit;
-      const baseTransfer=(hNorm*hBase)+(hDoble*hBase*cfg.doble)+descTransfer+fijo;
-      const baseEfectivo=(hExtra*hBase*cfg.extra)+(hExtraDoble*hBase*cfg.extraDoble)+descEfectivo;
+      // Transfer: normales + dobles + su porción de descanso
+      // Efectivo: extras + extra dobles — sin descanso ni CCSS
+      const baseTransfer=(hNorm*hBase)+(hDoble*hBase*cfg.doble)+descTotal+fijo;
+      const baseEfectivo=(hExtra*hBase*cfg.extra)+(hExtraDoble*hBase*cfg.extraDoble);
       rebajoCCSplit=ccssX?baseTransfer*(cfg.ccss/100):0;
       netoTr=baseTransfer-rebajoCCSplit;
       netoEf=baseEfectivo;
@@ -1098,7 +1098,7 @@ function renderComprobantes(){
       ${r.hExtra>0?`<div class="comp-row"><span>Horas extra (${r.hExtra.toFixed(2)} h × ${fmtMon(parseFloat(r.emp.horaBase)*cfg.extra)})</span><span>${fmtMon(r.hExtra*parseFloat(r.emp.horaBase)*cfg.extra)}</span></div>`:''}
       ${r.hDoble>0?`<div class="comp-row"><span>Horas dobles/feriado (${r.hDoble.toFixed(2)} h × ${fmtMon(parseFloat(r.emp.horaBase)*cfg.doble)})</span><span>${fmtMon(r.hDoble*parseFloat(r.emp.horaBase)*cfg.doble)}</span></div>`:''}
       ${r.hExtraDoble>0?`<div class="comp-row" style="color:var(--danger)"><span>Horas extra dobles/feriado (${r.hExtraDoble.toFixed(2)} h × ${fmtMon(parseFloat(r.emp.horaBase)*cfg.extraDoble)})</span><span>${fmtMon(r.hExtraDoble*parseFloat(r.emp.horaBase)*cfg.extraDoble)}</span></div>`:''}
-      ${r.descTotal>0?`<div class="comp-row"><span>Porción de descanso (${(r.hNorm+r.hExtra+r.hDoble+r.hExtraDoble).toFixed(2)} h × ${fmtMon(parseFloat(r.emp.horaBase)*(cfg.descH/cfg.descD))})</span><span>${fmtMon(r.descTotal)}</span></div>`:''}
+      ${r.descTotal>0?`<div class="comp-row"><span>Porción de descanso (${(r.isSplit?(r.hNorm+r.hDoble):(r.hNorm+r.hExtra+r.hDoble+r.hExtraDoble)).toFixed(2)} h × ${fmtMon(parseFloat(r.emp.horaBase)*(cfg.descH/cfg.descD))})</span><span>${fmtMon(r.descTotal)}</span></div>`:''}
       ${r.fijo>0?`<div class="comp-row"><span>Salario fijo / adicional</span><span>${fmtMon(r.fijo)}</span></div>`:''}
       <div class="comp-row" style="font-weight:600"><span>Salario bruto</span><span>${fmtMon(r.bruto)}</span></div>
       ${r.rebajoCC>0?`<div class="comp-row" style="color:var(--danger)"><span>Rebajo CCSS (${cfg.ccss}%)${r.isSplit?' — solo sobre horas normales':''}</span><span>-${fmtMon(r.rebajoCC)}</span></div>`:''}
