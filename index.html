@@ -1196,9 +1196,11 @@ function renderBilletes(){
 }
 
 function exportarBilletesImagen(){
-  const tots={};DENOMS.forEach(d=>tots[d]=0);let totalEf=0;
+  const tots={};DENOMS.forEach(d=>tots[d]=0);let totalEf=0,totalEfRed=0;
   resultados.filter(r=>r.netoEf>0&&!r.sinPerfil).forEach(r=>{
-    const b=calcBilletes(r.netoEf);DENOMS.forEach(d=>tots[d]+=b[d]);totalEf+=r.netoEf;
+    const redondeado=redondear500(r.netoEf);
+    const b=calcBilletes(redondeado);DENOMS.forEach(d=>tots[d]+=b[d]);
+    totalEf+=r.netoEf;totalEfRed+=redondeado;
   });
 
   const canvas=document.createElement('canvas');
@@ -1215,10 +1217,10 @@ function exportarBilletesImagen(){
   ctx.fillText('RESTAURANTE LA FIESTA DE MAÍZ (PROFECHA)',44,56);
 
   ctx.font='400 10px sans-serif';ctx.fillStyle='rgba(255,255,255,0.3)';
-  ctx.fillText('EFECTIVO A RETIRAR DEL BANCO — SEMANA DEL '+weekLabel().toUpperCase(),44,74);
+  ctx.fillText('EFECTIVO A RETIRAR DEL BANCO — SEMANA DEL '+weekLabel().toUpperCase()+' · EXACTO: '+fmtMon(totalEf),44,74);
 
   ctx.font='600 40px monospace';ctx.fillStyle='#ffffff';
-  ctx.fillText(fmtMon(totalEf),44,132);
+  ctx.fillText(fmtMon(totalEfRed),44,132);
 
   ctx.strokeStyle='rgba(255,255,255,0.08)';ctx.lineWidth=1;
   ctx.beginPath();ctx.moveTo(44,150);ctx.lineTo(cw-44,150);ctx.stroke();
