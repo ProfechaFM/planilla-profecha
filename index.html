@@ -80,12 +80,22 @@ tr:hover td{background:var(--bg)}
 .alert-info{background:var(--info-l);border:1px solid #b8d4e8;color:var(--info)}
 .alert-ok{background:var(--accent-l);border:1px solid #9fcfb0;color:var(--accent)}
 .single-punch-row td{background:var(--danger-l)}
-.comprobante{border:1px solid var(--border);border-radius:var(--r);padding:1rem;margin-bottom:.75rem;page-break-inside:avoid}
-.comp-title{text-align:center;font-weight:600;font-size:13px;margin-bottom:2px}
-.comp-sub{text-align:center;font-size:11px;color:var(--text2);margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)}
-.comp-row{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);font-size:12px}
-.comp-total{display:flex;justify-content:space-between;padding:6px 0;font-weight:600;font-size:13px}
-.comp-firma{display:flex;justify-content:space-between;margin-top:10px;font-size:11px;color:var(--text3)}
+.comprobante{border:1px solid var(--border);border-radius:var(--r);padding:.5rem .85rem;margin-bottom:.4rem;page-break-inside:avoid;box-sizing:border-box}
+.comp-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:2px}
+.comp-header-text{flex:1}
+.comp-logo{width:40px;height:40px;object-fit:contain;border-radius:5px;flex-shrink:0;margin-left:8px}
+.comp-title{font-weight:600;font-size:11.5px;margin-bottom:1px}
+.comp-emp-name{font-size:14px;font-weight:700;color:var(--text);margin-bottom:0;letter-spacing:-.2px}
+.comp-emp-meta{font-size:10px;color:var(--text2);margin-bottom:3px;padding-bottom:3px;border-bottom:1px solid var(--border)}
+.comp-sub{font-size:10px;color:var(--text2);margin-bottom:3px}
+.comp-row{display:flex;justify-content:space-between;padding:1.5px 0;border-bottom:1px solid var(--border);font-size:11px}
+.comp-total{display:flex;justify-content:space-between;padding:3px 0;font-weight:600;font-size:12px}
+.comp-firma{display:flex;justify-content:space-between;gap:1rem;margin-top:5px;font-size:10.5px;color:var(--text3)}
+.comp-firma-field{flex:1}
+.comp-firma-line{display:inline-block;border-bottom:1px solid var(--border2);width:calc(100% - 50px);vertical-align:bottom}
+@media print{
+  .comprobante{height:calc(33.33vh - 14px);overflow:hidden}
+}
 .billetes-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:1rem}
 .bil-card{background:var(--surface2);border-radius:var(--r);padding:1rem;text-align:center;border:1px solid var(--border)}
 .bil-den{font-size:11px;color:var(--text3);font-weight:500}
@@ -99,11 +109,15 @@ tr:hover td{background:var(--bg)}
 .tab-wrap{overflow-x:auto}
 .edit-inp{font-size:12px;padding:4px 6px;border:1px solid var(--border2);border-radius:4px;background:var(--surface);color:var(--text);font-family:'DM Mono',monospace;width:100%}
 .edit-inp:focus{outline:none;border-color:var(--accent)}
+.portada{display:none}
 @media print{
+  .portada{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;page-break-after:always;text-align:center;padding:3cm}
   .sidebar,.abar,.nav-item,.btn,.week-nav button,.page-header,.notice{display:none!important}
   .app{display:block}.main{padding:0;overflow:visible}
   body{overflow:visible}
-  .comprobante{border:1px solid #ccc;margin-bottom:1cm}
+  @page{margin:.8cm;size:letter portrait}
+  #page-comprobantes{padding:0;max-width:72%;margin:0 auto}
+  .comprobante{height:calc(33.33vh - 1rem);border:1px solid #ccc;margin-bottom:.5rem;overflow:hidden;page-break-inside:avoid}
 }
 </style>
 </head>
@@ -121,6 +135,7 @@ tr:hover td{background:var(--bg)}
     <div class="nav-item" onclick="nav('billetes',this)"><span>₡</span> Billetes</div>
     <div class="nav-item" onclick="nav('comprobantes',this)"><span>▤</span> Comprobantes</div>
     <div class="nav-item" onclick="nav('historial',this)"><span>◷</span> Historial</div>
+    <div class="nav-item" onclick="nav('aguinaldo',this)"><span>✦</span> Aguinaldo</div>
     <div class="nav-item" onclick="nav('empleados',this)"><span>✦</span> Empleados</div>
     <div class="nav-item" onclick="nav('config',this)"><span>◈</span> Configuración</div>
     <div class="nav-item" onclick="nav('guia',this)"><span>?</span> Guía de uso</div>
@@ -156,7 +171,9 @@ tr:hover td{background:var(--bg)}
       <span class="week-lbl" id="week-label">—</span>
       <button class="btn btn-s" onclick="changeWeek(1)">Siguiente →</button>
       <span id="guardado-indicator" style="margin-left:auto"></span>
+      <span id="recalc-indicator" style="font-size:11px;color:var(--accent);font-weight:500;opacity:0;transition:opacity .4s">↻ Actualizado</span>
     </div>
+    <div id="sin-horas-alert" style="display:none"></div>
     <div id="single-punch-alerts"></div>
     <div id="schedule-header"></div>
     <div id="schedule-rows"></div>
@@ -253,6 +270,17 @@ tr:hover td{background:var(--bg)}
     <button class="btn btn-p" onclick="window.print()">Imprimir todos</button>
     <button class="btn btn-s" onclick="imprimirSoloCCSS()">Imprimir solo asegurados CCSS</button>
   </div>
+  <div class="portada" id="portada-comp">
+    <img src="https://media-cdn.tripadvisor.com/media/photo-s/04/a0/da/cc/la-fiesta-del-maiz.jpg"
+         style="width:120px;height:120px;object-fit:contain;border-radius:16px;margin-bottom:2rem;opacity:.9"
+         onerror="this.style.display='none'">
+    <div style="font-size:11px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:#888;margin-bottom:.75rem">Profecha S.A.</div>
+    <div style="font-size:28px;font-weight:700;letter-spacing:-.5px;color:#1a1917;margin-bottom:.5rem">La Fiesta de Maíz</div>
+    <div style="font-size:16px;font-weight:500;color:#444;margin-bottom:2.5rem">Planilla semanal de pago</div>
+    <div style="width:60px;height:3px;background:#2d5a3d;border-radius:2px;margin-bottom:2.5rem"></div>
+    <div style="font-size:22px;font-weight:600;color:#1a1917;font-family:'DM Mono',monospace;letter-spacing:-.3px" id="portada-semana">—</div>
+    <div style="font-size:12px;color:#888;margin-top:2rem;position:absolute;bottom:3cm;left:0;right:0;text-align:center">Documento confidencial · Uso interno</div>
+  </div>
   <div id="comprobantes-list"><div class="card" style="text-align:center;color:var(--text3);padding:2rem">Calculá la planilla primero</div></div>
 </div>
 
@@ -264,10 +292,68 @@ tr:hover td{background:var(--bg)}
       <select id="hist-mes"><option value="1">Enero</option><option value="2">Febrero</option><option value="3">Marzo</option><option value="4">Abril</option><option value="5">Mayo</option><option value="6">Junio</option><option value="7">Julio</option><option value="8">Agosto</option><option value="9">Setiembre</option><option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option></select>
       <select id="hist-anio"></select>
       <button class="btn btn-p" onclick="cargarHistorial()">Ver resumen</button>
+      <button class="btn btn-s" onclick="exportarHistorialExcel()" id="hist-export-btn" style="display:none">Exportar Excel</button>
     </div>
+    <div id="hist-meta" style="font-size:12px;color:var(--text2);margin-bottom:.75rem;display:none"></div>
     <div class="tab-wrap">
-      <table><thead><tr><th>Empleado</th><th style="text-align:right">Sem 1</th><th style="text-align:right">Sem 2</th><th style="text-align:right">Sem 3</th><th style="text-align:right">Sem 4</th><th style="text-align:right">Sem 5</th><th style="text-align:right">Total bruto</th><th style="text-align:right">Total CCSS</th></tr></thead>
+      <table><thead id="hist-thead"><tr>
+        <th>Empleado</th>
+        <th style="text-align:right">Sem 1</th>
+        <th style="text-align:right">Sem 2</th>
+        <th style="text-align:right">Sem 3</th>
+        <th style="text-align:right">Sem 4</th>
+        <th style="text-align:right">Sem 5</th>
+        <th style="text-align:right">Total bruto</th>
+        <th style="text-align:right">Total CCSS</th>
+      </tr></thead>
       <tbody id="hist-body"><tr><td colspan="8" style="text-align:center;color:var(--text3);padding:2rem">Seleccioná mes y año</td></tr></tbody></table>
+    </div>
+  </div>
+</div>
+
+
+<!-- AGUINALDO -->
+<div id="page-aguinaldo" class="page">
+  <div class="page-header">
+    <div class="page-title">Cálculo de aguinaldo</div>
+    <div class="page-sub">Período diciembre → noviembre. Se calcula como: suma de salarios brutos del año ÷ 12.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Período y empleados</div>
+    <div class="form-grid" style="margin-bottom:1rem">
+      <div class="fg">
+        <label>Año del aguinaldo</label>
+        <select id="ag-anio" style="font-size:13px;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--rs);background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif"></select>
+      </div>
+      <div class="fg" style="justify-content:flex-end;flex-direction:row;align-items:flex-end;gap:8px">
+        <button class="btn btn-p" onclick="calcularAguinaldo()">Calcular aguinaldo</button>
+        <button class="btn btn-s" id="ag-export-btn" style="display:none" onclick="exportarAguinaldoExcel()">Exportar Excel</button>
+      </div>
+    </div>
+
+    <div class="card-title" style="margin-top:.5rem">Seleccionar empleados</div>
+    <div style="display:flex;gap:8px;margin-bottom:.75rem;flex-wrap:wrap">
+      <button class="btn btn-s" style="font-size:11px;padding:5px 10px" onclick="agSeleccionarTodos()">Seleccionar todos</button>
+      <button class="btn btn-s" style="font-size:11px;padding:5px 10px" onclick="agDeseleccionarTodos()">Deseleccionar todos</button>
+      <input type="text" id="ag-buscar" placeholder="Buscar empleado..." oninput="agFiltrarLista()"
+        style="font-size:12px;padding:5px 9px;border:1px solid var(--border2);border-radius:var(--rs);background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif;width:200px">
+    </div>
+    <div id="ag-emp-lista" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:6px;max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--rs);padding:10px">
+      <div style="color:var(--text3);font-size:13px">Cargá empleados primero desde la pestaña Empleados.</div>
+    </div>
+  </div>
+
+  <div id="ag-resultado" style="display:none">
+    <div class="card">
+      <div id="ag-resumen-meta" style="font-size:13px;color:var(--text2);margin-bottom:1rem"></div>
+      <div class="card-title">Detalle por empleado</div>
+      <div class="tab-wrap">
+        <table id="ag-tabla">
+          <thead id="ag-thead"></thead>
+          <tbody id="ag-tbody"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 </div>
@@ -293,7 +379,33 @@ tr:hover td{background:var(--bg)}
   </div>
 
   <div class="card">
-    <div class="card-title">Base de empleados <span id="emp-count" style="font-weight:400;color:var(--text3)"></span></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:8px">
+      <div class="card-title" style="margin-bottom:0">Base de empleados <span id="emp-count" style="font-weight:400;color:var(--text3)"></span></div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <input type="text" id="emp-search" placeholder="🔍 Buscar por nombre..." oninput="filtrarEmpleados()"
+          style="font-size:12px;padding:5px 9px;border:1px solid var(--border2);border-radius:var(--rs);background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif;width:190px">
+        <select id="emp-f-puesto" onchange="filtrarEmpleados()" style="font-size:12px;padding:5px 8px;border:1px solid var(--border2);border-radius:var(--rs);background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif">
+          <option value="">Puesto: todos</option>
+        </select>
+        <select id="emp-f-ccss" onchange="filtrarEmpleados()" style="font-size:12px;padding:5px 8px;border:1px solid var(--border2);border-radius:var(--rs);background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif">
+          <option value="">CCSS: todos</option>
+          <option value="X">Asegurado</option>
+          <option value="_no">No asegurado</option>
+        </select>
+        <select id="emp-f-pago" onchange="filtrarEmpleados()" style="font-size:12px;padding:5px 8px;border:1px solid var(--border2);border-radius:var(--rs);background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif">
+          <option value="">Pago: todos</option>
+          <option value="efectivo">Efectivo</option>
+          <option value="transferencia">Transferencia</option>
+        </select>
+        <select id="emp-f-nota" onchange="filtrarEmpleados()" style="font-size:12px;padding:5px 8px;border:1px solid var(--border2);border-radius:var(--rs);background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif">
+          <option value="">Especial: todos</option>
+          <option value="supervisor">Supervisor</option>
+          <option value="split">Split</option>
+          <option value="_none">Sin especial</option>
+        </select>
+        <button class="btn btn-s" onclick="limpiarFiltrosEmp()" style="font-size:11px;padding:5px 9px">✕ Limpiar</button>
+      </div>
+    </div>
     <div class="tab-wrap">
       <table><thead><tr><th>ID Reloj</th><th>Nombre</th><th>Cédula</th><th>Puesto</th><th>H. Base (₡)</th><th>Fijo sem. (₡)</th><th>CCSS</th><th>Pago</th><th>Especial</th><th>Acciones</th></tr></thead>
       <tbody id="emp-tbody"><tr><td colspan="10" style="text-align:center;color:var(--text3);padding:2rem">Sin empleados cargados</td></tr></tbody></table>
@@ -604,6 +716,7 @@ function nav(id,el){
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
   el.classList.add('active');
+  if(id==='aguinaldo')agRenderLista();
 }
 
 function updateHeader(){
@@ -941,22 +1054,27 @@ function calcularPago(){
     const fijo=parseFloat(emp.fijo)||0;
     const ccssX=emp.ccss==='X';
     const isSplit=emp.nota==='split';
+    const isSup=emp.nota==='supervisor';
     const descUnit=ccssX?hBase*(cfg.descH/cfg.descD):0;
     // Para split: descanso solo sobre normales y dobles (las que tienen CCSS)
     // Para el resto: descanso sobre todas las horas
+    // Fijo del supervisor NO entra en la base de descanso ni de CCSS
     const hTotalDesc=isSplit?(hNorm+hDoble):(hNorm+hExtra+hDoble+hExtraDoble);
     const descTotal=hTotalDesc*descUnit;
-    let bruto=hBase>0
-      ?(hNorm*hBase)+(hExtra*hBase*cfg.extra)+(hDoble*hBase*cfg.doble)+(hExtraDoble*hBase*cfg.extraDoble)+descTotal+fijo
-      :fijo;
-    const rebajoCC=ccssX?bruto*(cfg.ccss/100):0;
-    const neto=bruto-rebajoCC;
+    // baseSalarial = horas valoradas + descanso (sin el fijo del supervisor)
+    const baseSalarial=hBase>0
+      ?(hNorm*hBase)+(hExtra*hBase*cfg.extra)+(hDoble*hBase*cfg.doble)+(hExtraDoble*hBase*cfg.extraDoble)+descTotal
+      :0;
+    const rebajoCC=ccssX?baseSalarial*(cfg.ccss/100):0;
+    // El fijo del supervisor se suma DESPUÉS del rebajo CCSS
+    const bruto=baseSalarial+fijo;
+    const neto=baseSalarial-rebajoCC+fijo;
 
     let netoEf=0,netoTr=0,rebajoCCSplit=0;
     if(isSplit){
-      // Transfer: normales + dobles + su porción de descanso
+      // Transfer: normales + dobles + su porción de descanso (sin fijo — split no es supervisor)
       // Efectivo: extras + extra dobles — sin descanso ni CCSS
-      const baseTransfer=(hNorm*hBase)+(hDoble*hBase*cfg.doble)+descTotal+fijo;
+      const baseTransfer=(hNorm*hBase)+(hDoble*hBase*cfg.doble)+descTotal;
       const baseEfectivo=(hExtra*hBase*cfg.extra)+(hExtraDoble*hBase*cfg.extraDoble);
       rebajoCCSplit=ccssX?baseTransfer*(cfg.ccss/100):0;
       netoTr=baseTransfer-rebajoCCSplit;
@@ -973,7 +1091,32 @@ function calcularPago(){
   document.getElementById('m-neto-ef').textContent=fmtMon(totEf);
   document.getElementById('m-neto-tr').textContent=fmtMon(totTr);
   renderCalculo();renderTransferencias();renderBilletes();renderComprobantes();
-  alert('Planilla calculada. Revisá las demás pestañas.');
+
+  // Alerta de empleados activos sin ninguna hora cargada esta semana
+  const wData2=horarioActual[weekKey()]||{};
+  const sinHoras=empleados.filter(emp=>{
+    const eh=wData2[emp.id]||{};
+    // Tiene horas si al menos un día tiene entrada y salida válidas y no es single
+    return !Array.from({length:7},(_,d)=>eh['d'+d]).some(dd=>dd&&dd.entrada!=null&&dd.salida!=null&&!dd.single);
+  });
+  const alertEl=document.getElementById('sin-horas-alert');
+  if(sinHoras.length){
+    alertEl.innerHTML=`<div class="alert alert-warn" style="margin-bottom:1rem">
+      <span>⚠</span>
+      <div><strong>${sinHoras.length} empleado(s) activo(s) sin horas esta semana:</strong><br>
+      ${sinHoras.map(e=>`${e.nombre} <span style="color:var(--text3);font-size:11px">(ID ${e.id} · ${e.puesto||'sin puesto'})</span>`).join('<br>')}
+      <br><span style="font-size:11px;margin-top:4px;display:block">Si es correcto (vacaciones, ausencia), ignorá este aviso. Si no, revisá el horario antes de guardar.</span>
+      </div></div>`;
+    alertEl.style.display='block';
+  } else {
+    alertEl.innerHTML='';
+    alertEl.style.display='none';
+  }
+
+  const msg=sinHoras.length
+    ? `Planilla calculada.\n\n⚠ ${sinHoras.length} empleado(s) sin horas: ${sinHoras.map(e=>e.nombre.split(' ')[0]).join(', ')}\n\nRevisá la alerta en la pestaña Horario.`
+    : 'Planilla calculada. Revisá las demás pestañas.';
+  alert(msg);
 }
 
 function renderCalculo(){
@@ -1110,15 +1253,26 @@ function exportarBilletesImagen(){
   link.href=canvas.toDataURL('image/png');link.click();
 }
 
+const LOGO_URL='https://media-cdn.tripadvisor.com/media/photo-s/04/a0/da/cc/la-fiesta-del-maiz.jpg';
+
 function renderComprobantes(){
   const wEnd=addDays(currentWeekStart,6);
   const sem=fmtDate(currentWeekStart)+' al '+fmtDate(wEnd);
+  const portadaEl=document.getElementById('portada-semana');
+  if(portadaEl)portadaEl.textContent=sem;
   const conPago=resultados.filter(r=>!r.sinPerfil&&r.neto>0);
   const sinPago=resultados.filter(r=>!r.sinPerfil&&r.neto<=0);
   document.getElementById('comprobantes-list').innerHTML=conPago.map(r=>`
     <div class="comprobante" data-empid="${r.empId}">
-      <div class="comp-title">RESTAURANTE LA FIESTA DE MAÍZ (PROFECHA)</div>
-      <div class="comp-sub">Comprobante de pago — Semana del ${sem}<br><strong>${r.nombre}</strong> · ${r.emp.puesto||''}${r.emp.ccss==='X'?' · Asegurado CCSS':''}</div>
+      <div class="comp-header">
+        <div class="comp-header-text">
+          <div class="comp-title">RESTAURANTE LA FIESTA DE MAÍZ (PROFECHA)</div>
+          <div style="font-size:11px;color:var(--text2)">Comprobante de pago — Semana del ${sem}</div>
+        </div>
+        <img src="${LOGO_URL}" class="comp-logo" alt="Logo Profecha" onerror="this.style.display='none'">
+      </div>
+      <div class="comp-emp-name">${r.nombre}</div>
+      <div class="comp-emp-meta">ID Reloj: <strong>${r.empId}</strong> · ${r.emp.puesto||''}${r.emp.ccss==='X'?' · Asegurado CCSS':''}</div>
       ${r.hNorm>0?`<div class="comp-row"><span>Horas normales (${r.hNorm.toFixed(2)} h × ${fmtMon(r.emp.horaBase)})</span><span>${fmtMon(r.hNorm*r.emp.horaBase)}</span></div>`:''}
       ${r.hExtra>0?`<div class="comp-row"><span>Horas extra (${r.hExtra.toFixed(2)} h × ${fmtMon(r.emp.horaBase*cfg.extra)})</span><span>${fmtMon(r.hExtra*r.emp.horaBase*cfg.extra)}</span></div>`:''}
       ${r.hDoble>0?`<div class="comp-row"><span>Horas dobles/feriado (${r.hDoble.toFixed(2)} h × ${fmtMon(r.emp.horaBase*cfg.doble)})</span><span>${fmtMon(r.hDoble*r.emp.horaBase*cfg.doble)}</span></div>`:''}
@@ -1128,8 +1282,12 @@ function renderComprobantes(){
       <div class="comp-row" style="font-weight:600"><span>Salario bruto</span><span>${fmtMon(r.bruto)}</span></div>
       ${r.rebajoCC>0?`<div class="comp-row" style="color:var(--danger)"><span>Rebajo CCSS (${cfg.ccss}%)${r.isSplit?' — solo sobre horas normales':''}</span><span>-${fmtMon(r.rebajoCC)}</span></div>`:''}
       <div class="comp-total"><span>SALARIO NETO</span><span>${fmtMon(r.neto)}</span></div>
-      ${r.isSplit?`<div style="margin-top:8px;padding:8px;background:var(--warn-l);border-radius:4px;font-size:11px"><strong>Desglose:</strong> Transferencia (normales - CCSS): ${fmtMon(r.netoTr)} · Efectivo (extras sin rebajo): ${fmtMon(r.netoEf)}</div>`:''}
-      <div class="comp-firma"><span>Pago: ${r.isSplit?'Mixto':r.emp.pago==='transferencia'?'Transferencia':'Efectivo'}</span><span>Firma: ___________________________</span></div>
+      ${r.isSplit?`<div style="margin-top:3px;padding:3px 6px;background:var(--warn-l);border-radius:4px;font-size:10px"><strong>Desglose:</strong> Transferencia (normales - CCSS): ${fmtMon(r.netoTr)} · Efectivo (extras sin rebajo): ${fmtMon(r.netoEf)}</div>`:''}
+      <div class="comp-firma">
+        <span>Pago: ${r.isSplit?'Mixto':r.emp.pago==='transferencia'?'Transferencia':'Efectivo'}</span>
+        <span>Cédula: <span style="display:inline-block;border-bottom:1px solid var(--border2);width:120px;vertical-align:bottom">&nbsp;</span></span>
+        <span>Firma: <span style="display:inline-block;border-bottom:1px solid var(--border2);width:180px;vertical-align:bottom">&nbsp;</span></span>
+      </div>
     </div>`).join('')+
     (sinPago.length?`<div class="notice" style="margin-top:1rem;page-break-inside:avoid">
       <strong>Omitidos por neto ₡0 (no se imprimen):</strong> ${sinPago.map(r=>r.nombre+' '+((r.emp&&r.emp.apellidos)||'')).join(', ')}
@@ -1175,6 +1333,7 @@ function descargarPlantilla(){
 }
 
 function renderEmpTable(){
+  actualizarFiltrosPuesto();
   document.getElementById('emp-count').textContent=`(${empleados.length})`;
   document.getElementById('emp-tbody').innerHTML=empleados.length?empleados.map((e,i)=>`
     <tr id="emp-row-${i}">
@@ -1195,9 +1354,137 @@ function renderEmpTable(){
     :'<tr><td colspan="10" style="text-align:center;color:var(--text3);padding:2rem">Sin empleados</td></tr>';
 }
 
+function actualizarFiltrosPuesto(){
+  const sel=document.getElementById('emp-f-puesto');
+  if(!sel)return;
+  const actual=sel.value;
+  const puestos=[...new Set(empleados.map(e=>e.puesto).filter(Boolean))].sort();
+  sel.innerHTML='<option value="">Puesto: todos</option>'+puestos.map(p=>`<option value="${p}"${p===actual?' selected':''}>${p}</option>`).join('');
+}
+
+function filtrarEmpleados(){
+  const search=(document.getElementById('emp-search').value||'').toLowerCase();
+  const fPuesto=document.getElementById('emp-f-puesto').value;
+  const fCCSS=document.getElementById('emp-f-ccss').value;
+  const fPago=document.getElementById('emp-f-pago').value;
+  const fNota=document.getElementById('emp-f-nota').value;
+
+  const filtered=empleados.filter((e,i)=>{
+    if(search&&!e.nombre.toLowerCase().includes(search))return false;
+    if(fPuesto&&e.puesto!==fPuesto)return false;
+    if(fCCSS==='X'&&e.ccss!=='X')return false;
+    if(fCCSS==='_no'&&e.ccss==='X')return false;
+    if(fPago&&e.pago!==fPago)return false;
+    if(fNota==='_none'&&e.nota)return false;
+    if(fNota&&fNota!=='_none'&&e.nota!==fNota)return false;
+    return true;
+  });
+
+  // Map filtered back to original indices for edit/remove buttons
+  const idxMap=filtered.map(e=>empleados.indexOf(e));
+  const count=filtered.length;
+  document.getElementById('emp-count').textContent=`(${count} de ${empleados.length})`;
+
+  document.getElementById('emp-tbody').innerHTML=filtered.length?idxMap.map((origIdx,_)=>{
+    const e=empleados[origIdx];
+    return `<tr id="emp-row-${origIdx}">
+      <td style="font-family:'DM Mono',monospace;color:var(--text3)">${e.id}</td>
+      <td style="font-weight:500">${e.nombre}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:12px">${e.cedula||'—'}</td>
+      <td style="font-size:12px">${e.puesto}</td>
+      <td><input class="edit-inp" value="${e.horaBase||0}" onchange="updateEmp(${origIdx},'horaBase',this.value)" style="width:90px"></td>
+      <td><input class="edit-inp" value="${e.fijo||0}" onchange="updateEmp(${origIdx},'fijo',this.value)" style="width:80px"></td>
+      <td>${e.ccss==='X'?'<span class="badge b-ccss">Sí</span>':'No'}</td>
+      <td>${e.pago==='transferencia'?'<span class="badge b-tr">Transf</span>':'<span class="badge b-ef">Efect</span>'}</td>
+      <td>${e.nota==='split'?'<span class="badge b-split">Split</span>':e.nota==='supervisor'?'<span class="badge b-sup">Sup</span>':'—'}</td>
+      <td style="display:flex;gap:4px">
+        <button class="btn btn-warn" onclick="editEmpModal(${origIdx})">Editar</button>
+        <button class="btn btn-d" onclick="removeEmp(${origIdx})">Quitar</button>
+      </td>
+    </tr>`;
+  }).join('')
+  :'<tr><td colspan="10" style="text-align:center;color:var(--text3);padding:2rem">Sin resultados para los filtros aplicados</td></tr>';
+}
+
+function limpiarFiltrosEmp(){
+  document.getElementById('emp-search').value='';
+  document.getElementById('emp-f-puesto').value='';
+  document.getElementById('emp-f-ccss').value='';
+  document.getElementById('emp-f-pago').value='';
+  document.getElementById('emp-f-nota').value='';
+  renderEmpTable();
+}
+
 function updateEmp(i,field,val){
   if(field==='horaBase'||field==='fijo')empleados[i][field]=parseFloat(val)||0;
   else empleados[i][field]=val;
+  // Si ya hay resultados calculados, recalcular silenciosamente
+  if(resultados.length) recalcularSilencioso();
+}
+
+function recalcularSilencioso(){
+  // Igual que calcularPago pero sin alerts ni actualizar la alerta de sin-horas
+  const wk=weekKey();
+  const wData=horarioActual[wk]||{};
+  resultados=[];
+  let totBruto=0,totCCSS=0,totEf=0,totTr=0;
+
+  const empIds=new Set([...empleados.map(e=>e.id),...Object.keys(wData).filter(k=>!k.endsWith('_fer')&&Object.keys(wData[k]).some(dk=>dk.startsWith('d')))]);
+
+  empIds.forEach(empId=>{
+    const emp=empleados.find(e=>e.id===empId);
+    const eh=wData[empId]||{};
+    let hNorm=0,hExtra=0,hDoble=0,hExtraDoble=0,hFeriadoBase=0;
+    for(let d=0;d<7;d++){
+      const dd=eh['d'+d];
+      if(!dd||dd.entrada==null||dd.salida==null||dd.single)continue;
+      const h=dd.salida-dd.entrada;
+      if(h<=0)continue;
+      if(feriados[d]){
+        const doblesDia=Math.min(h,8);hDoble+=doblesDia;hExtraDoble+=Math.max(0,h-8);hFeriadoBase+=doblesDia;
+      } else if(!cfg.extrasAcumulativas){
+        hNorm+=Math.min(h,8);hExtra+=Math.max(0,h-8);
+      } else {hNorm+=h;}
+    }
+    if(cfg.extrasAcumulativas){
+      const LIMITE=Math.max(0,48-hFeriadoBase);hExtra=Math.max(0,hNorm-LIMITE);hNorm=Math.min(hNorm,LIMITE);
+    }
+    if(!emp){
+      resultados.push({emp:null,empId,nombre:(eh.nombre||'ID '+empId),hNorm,hExtra,hDoble,hExtraDoble,descTotal:0,fijo:0,bruto:0,rebajoCC:0,neto:0,netoEf:0,netoTr:0,isSplit:false,sinPerfil:true});
+      return;
+    }
+    const hBase=parseFloat(emp.horaBase)||0;
+    const fijo=parseFloat(emp.fijo)||0;
+    const ccssX=emp.ccss==='X';
+    const isSplit=emp.nota==='split';
+    const descUnit=ccssX?hBase*(cfg.descH/cfg.descD):0;
+    const hTotalDesc=isSplit?(hNorm+hDoble):(hNorm+hExtra+hDoble+hExtraDoble);
+    const descTotal=hTotalDesc*descUnit;
+    const baseSalarial=hBase>0?(hNorm*hBase)+(hExtra*hBase*cfg.extra)+(hDoble*hBase*cfg.doble)+(hExtraDoble*hBase*cfg.extraDoble)+descTotal:0;
+    const rebajoCC=ccssX?baseSalarial*(cfg.ccss/100):0;
+    const bruto=baseSalarial+fijo;
+    const neto=baseSalarial-rebajoCC+fijo;
+    let netoEf=0,netoTr=0,rebajoCCSplit=0;
+    if(isSplit){
+      const baseTransfer=(hNorm*hBase)+(hDoble*hBase*cfg.doble)+descTotal;
+      const baseEfectivo=(hExtra*hBase*cfg.extra)+(hExtraDoble*hBase*cfg.extraDoble);
+      rebajoCCSplit=ccssX?baseTransfer*(cfg.ccss/100):0;
+      netoTr=baseTransfer-rebajoCCSplit;netoEf=baseEfectivo;
+    }else if(emp.pago==='transferencia'){netoTr=neto;}
+    else{netoEf=neto;}
+    const rebajoEfectivo=isSplit?rebajoCCSplit:rebajoCC;
+    totBruto+=bruto;totCCSS+=rebajoEfectivo;totEf+=netoEf;totTr+=netoTr;
+    resultados.push({emp,empId,nombre:emp.nombre,hNorm,hExtra,hDoble,hExtraDoble,descTotal,fijo,bruto,rebajoCC:rebajoEfectivo,neto:netoTr+netoEf,netoEf,netoTr,isSplit,sinPerfil:false});
+  });
+
+  document.getElementById('m-bruto').textContent=fmtMon(totBruto);
+  document.getElementById('m-ccss').textContent=fmtMon(totCCSS);
+  document.getElementById('m-neto-ef').textContent=fmtMon(totEf);
+  document.getElementById('m-neto-tr').textContent=fmtMon(totTr);
+  renderCalculo();renderTransferencias();renderBilletes();renderComprobantes();
+  // Indicador visual discreto en vez de alert
+  const ind=document.getElementById('recalc-indicator');
+  if(ind){ind.textContent='↻ Actualizado';ind.style.opacity='1';setTimeout(()=>ind.style.opacity='0',2000);}
 }
 
 function editEmpModal(i){
@@ -1233,6 +1520,7 @@ function saveEmpleado(){
   editingEmp=null;
   renderEmpTable();renderSchedule();
   document.getElementById('add-emp-form').style.display='none';
+  if(resultados.length) recalcularSilencioso();
 }
 
 function removeEmp(i){if(confirm('¿Quitar a '+empleados[i].nombre+'?')){empleados.splice(i,1);renderEmpTable();renderSchedule();}}
@@ -1353,7 +1641,8 @@ function actualizarIndicadorGuardado(){
 async function autoGuardarHorario(){
   if(!accessToken)return;
   const wk=weekKey();const wData=horarioActual[wk]||{};
-  const header=[`Semana: ${weekLabel()}`,...DAYS.map((d,i)=>feriados[i]?d+' FERIADO':d),'','','','','','',''];
+  const etiqueta=weekLabel();
+  const header=[`Semana: ${etiqueta}`,...DAYS.map((d,i)=>feriados[i]?d+' FERIADO':d),'','','','','','',''];
   const rows=Object.keys(wData).filter(k=>!k.endsWith('_fer')).map(empId=>{
     const eh=wData[empId];const emp=empleados.find(e=>e.id===empId);
     const row=[empId,emp?emp.nombre:(eh.nombre||'')];
@@ -1361,7 +1650,8 @@ async function autoGuardarHorario(){
     return row;
   });
   try{
-    await sheetsAppend('Horarios!A1',[header,...rows,['']]);
+    // Usa sobreescribirOAgregar para evitar duplicados si se carga el ZKteco más de una vez
+    await sobreescribirOAgregar('Horarios',etiqueta,header,rows);
     horarioPendiente=false;
     actualizarIndicadorGuardado();
     const statusEl=document.getElementById('zk-status');
@@ -1373,7 +1663,7 @@ async function autoGuardarHorario(){
 
 async function buscarRangoSemana(hoja, etiqueta){
   try{
-    const d=await sheetsGet(`${hoja}!A1:A500`);
+    const d=await sheetsGet(`${hoja}!A1:A2000`);
     const rows=d.values||[];
     for(let i=0;i<rows.length;i++){
       if(rows[i][0]&&rows[i][0].includes(etiqueta)){
@@ -1598,27 +1888,155 @@ function generarExcelTransferencias(){
   document.getElementById('transfer-validacion').style.display='block';
 }
 
+// Meses en español tal como los genera fmtDate (toLocaleDateString es-CR)
+const MESES_ES=['ene','feb','mar','abr','may','jun','jul','ago','set','oct','nov','dic'];
+
+// Parsea la etiqueta "Semana del 20 abr 2026 — 26 abr 2026" y devuelve {mes0, anio} del inicio
+function parsearEtiquetaSemana(etiqueta){
+  // Formato: "Semana del DD MMM YYYY — DD MMM YYYY"
+  const m=etiqueta.match(/(\d{1,2})\s+([a-záéíóúü\.]+)\s+(\d{4})/i);
+  if(!m)return null;
+  const mesStr=m[2].toLowerCase().replace('.','').substring(0,3);
+  const mes0=MESES_ES.indexOf(mesStr);
+  if(mes0===-1)return null;
+  return{mes0,anio:parseInt(m[3])};
+}
+
+// Historial global cacheado para reusar en exportar
+let historialCache={semanas:[],empMap:{},mesLabel:''};
+
 async function cargarHistorial(){
   if(!accessToken){alert('Conectate primero');return;}
+  const mesEl=document.getElementById('hist-mes');
+  const anioEl=document.getElementById('hist-anio');
+  const mesSel=parseInt(mesEl.value)-1; // 0-based
+  const anioSel=parseInt(anioEl.value);
+  const mesNombre=mesEl.options[mesEl.selectedIndex].text;
+
+  document.getElementById('hist-body').innerHTML=
+    '<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:2rem">Cargando...</td></tr>';
+
   try{
-    const d=await sheetsGet('Registro Semanal!A1:F500');
-    const rows=d.values||[];const empMap={};let semN=0;
-    rows.forEach(row=>{
-      if(row[0]&&String(row[0]).startsWith('Semana')){semN++;return;}
-      if(!row[1]||!semN)return;
-      if(!empMap[row[1]])empMap[row[1]]={sems:{},bruto:0,ccss:0};
-      empMap[row[1]].sems[semN]=(empMap[row[1]].sems[semN]||0)+(parseFloat(row[5])||0);
-      empMap[row[1]].bruto+=parseFloat(row[5])||0;
-      empMap[row[1]].ccss+=parseFloat(row[4])||0;
+    // Leer todo el registro — aumentamos a 2000 filas para cubrir años completos
+    const d=await sheetsGet('Registro Semanal!A1:G2000');
+    const rows=d.values||[];
+
+    // Identificar todos los bloques de semanas y filtrar los del mes/año seleccionado
+    const semanasDelMes=[]; // [{label, rowStart, rowEnd}]
+    let i=0;
+    while(i<rows.length){
+      const cell=rows[i]&&rows[i][0]?String(rows[i][0]).trim():'';
+      if(cell.startsWith('Semana')){
+        const parsed=parsearEtiquetaSemana(cell);
+        if(parsed&&parsed.mes0===mesSel&&parsed.anio===anioSel){
+          // Recopilar filas de datos hasta la siguiente fila vacía o encabezado
+          let j=i+1;
+          const dataRows=[];
+          while(j<rows.length){
+            const nextCell=rows[j]&&rows[j][0]?String(rows[j][0]).trim():'';
+            if(!rows[j]||!rows[j][0]||nextCell.startsWith('Semana'))break;
+            dataRows.push(rows[j]);
+            j++;
+          }
+          semanasDelMes.push({label:cell.replace('Semana del ',''),dataRows});
+          i=j;
+        } else {
+          i++;
+        }
+      } else {
+        i++;
+      }
+    }
+
+    if(!semanasDelMes.length){
+      document.getElementById('hist-body').innerHTML=
+        '<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:2rem">Sin registros para '+mesNombre+' '+anioSel+'</td></tr>';
+      document.getElementById('hist-meta').style.display='none';
+      document.getElementById('hist-export-btn').style.display='none';
+      return;
+    }
+
+    // Consolidar por empleado
+    const empMap={};
+    semanasDelMes.forEach((sem,idx)=>{
+      sem.dataRows.forEach(row=>{
+        if(!row[1])return; // sin nombre
+        const nombre=String(row[1]);
+        if(!empMap[nombre])empMap[nombre]={sems:{},bruto:0,ccss:0};
+        const brutoSem=parseFloat(row[5])||0;
+        const ccssSem=parseFloat(row[4])||0;
+        empMap[nombre].sems[idx+1]=(empMap[nombre].sems[idx+1]||0)+brutoSem;
+        empMap[nombre].bruto+=brutoSem;
+        empMap[nombre].ccss+=ccssSem;
+      });
     });
-    const entries=Object.entries(empMap);
-    document.getElementById('hist-body').innerHTML=entries.length?entries.map(([nombre,data])=>`<tr>
-      <td style="font-weight:500">${nombre}</td>
-      ${[1,2,3,4,5].map(i=>`<td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px">${data.sems[i]?fmtMon(data.sems[i]):'—'}</td>`).join('')}
-      <td style="text-align:right;font-weight:600;font-family:'DM Mono',monospace">${fmtMon(data.bruto)}</td>
-      <td style="text-align:right;color:var(--danger);font-family:'DM Mono',monospace">${fmtMon(data.ccss)}</td>
-    </tr>`).join(''):'<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:2rem">Sin datos</td></tr>';
+
+    // Guardar en caché para exportar
+    historialCache={semanas:semanasDelMes,empMap,mesLabel:mesNombre+' '+anioSel};
+
+    // Actualizar encabezados de columna con las fechas reales de cada semana
+    const numSems=semanasDelMes.length;
+    const thead=document.getElementById('hist-thead');
+    thead.innerHTML='<tr><th>Empleado</th>'+
+      semanasDelMes.map((s,i)=>`<th style="text-align:right;font-size:10px">Sem ${i+1}<br><span style="font-weight:400;color:var(--text3)">${s.label}</span></th>`).join('')+
+      // Rellenar hasta 5 columnas vacías si hay menos semanas
+      Array(Math.max(0,5-numSems)).fill('<th></th>').join('')+
+      '<th style="text-align:right">Total bruto</th><th style="text-align:right">Total CCSS</th></tr>';
+
+    // Meta info
+    const totalBruto=Object.values(empMap).reduce((s,e)=>s+e.bruto,0);
+    const totalCCSS=Object.values(empMap).reduce((s,e)=>s+e.ccss,0);
+    document.getElementById('hist-meta').style.display='block';
+    document.getElementById('hist-meta').innerHTML=
+      `<strong>${semanasDelMes.length} semana(s)</strong> encontradas en ${mesNombre} ${anioSel} · `+
+      `Bruto total del mes: <strong>${fmtMon(totalBruto)}</strong> · `+
+      `CCSS total: <strong style="color:var(--danger)">${fmtMon(totalCCSS)}</strong>`;
+
+    // Render tabla
+    const entries=Object.entries(empMap).sort((a,b)=>a[0].localeCompare(b[0]));
+    const totalCols=Math.max(5,numSems);
+    document.getElementById('hist-body').innerHTML=entries.length
+      ?entries.map(([nombre,data])=>`<tr>
+        <td style="font-weight:500">${nombre}</td>
+        ${Array.from({length:totalCols},(_,i)=>`<td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px">${data.sems[i+1]?fmtMon(data.sems[i+1]):'—'}</td>`).join('')}
+        <td style="text-align:right;font-weight:600;font-family:'DM Mono',monospace">${fmtMon(data.bruto)}</td>
+        <td style="text-align:right;color:var(--danger);font-family:'DM Mono',monospace">${fmtMon(data.ccss)}</td>
+      </tr>`).join('')
+      +'<tr style="border-top:2px solid var(--border2)">'
+      +'<td style="font-weight:700;font-size:12px">TOTAL</td>'
+      +Array.from({length:totalCols},(_,i)=>{
+        const tot=entries.reduce((s,[,d])=>s+(d.sems[i+1]||0),0);
+        return `<td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px;font-weight:600">${tot?fmtMon(tot):'—'}</td>`;
+      }).join('')
+      +`<td style="text-align:right;font-weight:700;font-family:'DM Mono',monospace">${fmtMon(Object.values(empMap).reduce((s,e)=>s+e.bruto,0))}</td>`
+      +`<td style="text-align:right;font-weight:700;font-family:'DM Mono',monospace;color:var(--danger)">${fmtMon(Object.values(empMap).reduce((s,e)=>s+e.ccss,0))}</td>`
+      +'</tr>'
+      :'<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:2rem">Sin datos para este mes</td></tr>';
+
+    document.getElementById('hist-export-btn').style.display='';
+
   }catch(e){alert('Error: '+e.message);}
+}
+
+function exportarHistorialExcel(){
+  const {semanas,empMap,mesLabel}=historialCache;
+  if(!semanas.length){alert('Cargá el historial primero');return;}
+  const wb=XLSX.utils.book_new();
+  const numSems=semanas.length;
+  const header=['Empleado',...semanas.map((s,i)=>'Sem '+(i+1)+': '+s.label),'Total Bruto','Total CCSS'];
+  const dataRows=Object.entries(empMap).sort((a,b)=>a[0].localeCompare(b[0])).map(([nombre,data])=>[
+    nombre,
+    ...Array.from({length:numSems},(_,i)=>data.sems[i+1]||0),
+    Math.round(data.bruto),
+    Math.round(data.ccss)
+  ]);
+  const totRow=['TOTAL',...Array.from({length:numSems},(_,i)=>Math.round(Object.values(empMap).reduce((s,e)=>s+(e.sems[i+1]||0),0))),
+    Math.round(Object.values(empMap).reduce((s,e)=>s+e.bruto,0)),
+    Math.round(Object.values(empMap).reduce((s,e)=>s+e.ccss,0))];
+  const ws=XLSX.utils.aoa_to_sheet([header,...dataRows,totRow]);
+  ws['!cols']=[{wch:30},...Array(numSems+2).fill({wch:18})];
+  XLSX.utils.book_append_sheet(wb,ws,'Historial '+mesLabel);
+  XLSX.writeFile(wb,'Historial_'+mesLabel.replace(/ /g,'_')+'.xlsx');
 }
 
 function setExtrasMode(mode){
@@ -1638,6 +2056,190 @@ function saveConfig(){
   alert('Guardado');
 }
 
+
+// ── Aguinaldo ──────────────────────────────────────────────────────
+let aguinaldoCache={};
+
+function agRenderLista(){
+  const buscar=(document.getElementById('ag-buscar')?.value||'').toLowerCase();
+  const lista=document.getElementById('ag-emp-lista');
+  if(!lista)return;
+  const empsFiltrados=empleados.filter(e=>!buscar||e.nombre.toLowerCase().includes(buscar)||e.id.includes(buscar));
+  if(!empsFiltrados.length){lista.innerHTML='<div style="color:var(--text3);font-size:13px">Sin coincidencias</div>';return;}
+  lista.innerHTML=empsFiltrados.map(e=>`
+    <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;padding:4px 6px;border-radius:4px;transition:background .1s"
+      onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">
+      <input type="checkbox" class="ag-check" data-id="${e.id}" checked style="accent-color:var(--accent);cursor:pointer">
+      <span><strong style="font-family:'DM Mono',monospace;color:var(--text3);font-size:10px">${e.id}</strong>
+      &nbsp;${e.nombre}&nbsp;<span style="font-size:10px;color:var(--text3)">${e.puesto||''}</span></span>
+    </label>`).join('');
+}
+
+function agFiltrarLista(){agRenderLista();}
+function agSeleccionarTodos(){document.querySelectorAll('.ag-check').forEach(c=>c.checked=true);}
+function agDeseleccionarTodos(){document.querySelectorAll('.ag-check').forEach(c=>c.checked=false);}
+
+function agIdsSeleccionados(){
+  return [...document.querySelectorAll('.ag-check:checked')].map(c=>c.dataset.id);
+}
+
+// Parsea fecha de etiqueta "Semana del DD mmm YYYY — DD mmm YYYY" → Date del inicio
+function agParsearFechaEtiqueta(etiqueta){
+  const m=etiqueta.match(/(\d{1,2})\s+([a-záéíóúü\.]+)\s+(\d{4})/i);
+  if(!m)return null;
+  const mesStr=m[2].toLowerCase().replace('.','').substring(0,3);
+  const mes0=MESES_ES.indexOf(mesStr);
+  if(mes0===-1)return null;
+  return new Date(parseInt(m[3]),mes0,parseInt(m[1]));
+}
+
+async function calcularAguinaldo(){
+  if(!accessToken){alert('Conectate primero');return;}
+  const anio=parseInt(document.getElementById('ag-anio').value);
+  const idsSeleccionados=agIdsSeleccionados();
+  if(!idsSeleccionados.length){alert('Seleccioná al menos un empleado');return;}
+
+  // Período: diciembre del año anterior → noviembre del año seleccionado
+  // Ej: aguinaldo 2026 = dic 2025 (mes 11, año anio-1) → nov 2026 (mes 10, año anio)
+  const periodoInicio=new Date(anio-1,11,1); // 1 dic año-1
+  const periodoFin=new Date(anio,11,0);      // 30 nov año (último día de nov)
+
+  document.getElementById('ag-resultado').style.display='none';
+  document.getElementById('ag-export-btn').style.display='none';
+
+  try{
+    const d=await sheetsGet('Registro Semanal!A1:G2000');
+    const rows=d.values||[];
+
+    // Recopilar semanas que caen en el período, con sus datos por empleado
+    // Estructura: {mesKey → {empId → bruto}}
+    // mesKey = "YYYY-MM"
+    const mesesData={}; // mesKey → {empId → bruto acumulado}
+    const semanasEncontradas=[];
+
+    let i=0;
+    while(i<rows.length){
+      const cell=rows[i]&&rows[i][0]?String(rows[i][0]).trim():'';
+      if(cell.startsWith('Semana')){
+        const etiqueta=cell.replace('Semana del ','');
+        const fechaIni=agParsearFechaEtiqueta(etiqueta);
+        if(fechaIni&&fechaIni>=periodoInicio&&fechaIni<=periodoFin){
+          const mesKey=fechaIni.getFullYear()+'-'+String(fechaIni.getMonth()+1).padStart(2,'0');
+          if(!mesesData[mesKey])mesesData[mesKey]={};
+          semanasEncontradas.push(etiqueta);
+          let j=i+1;
+          while(j<rows.length){
+            const nc=rows[j]&&rows[j][0]?String(rows[j][0]).trim():'';
+            if(!rows[j]||!rows[j][0]||nc.startsWith('Semana'))break;
+            const empId=String(rows[j][0]||'').trim();
+            const bruto=parseFloat(rows[j][5])||0;
+            if(empId&&idsSeleccionados.includes(empId)){
+              mesesData[mesKey][empId]=(mesesData[mesKey][empId]||0)+bruto;
+            }
+            j++;
+          }
+          i=j;
+        } else {i++;}
+      } else {i++;}
+    }
+
+    // Ordenar meses cronológicamente
+    const mesesOrdenados=Object.keys(mesesData).sort();
+    const MESES_LABEL=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Set','Oct','Nov','Dic'];
+
+    if(!mesesOrdenados.length){
+      alert('No se encontraron registros en el período diciembre '+(anio-1)+' — noviembre '+anio+'. Verificá que hayas guardado el registro semanal.');
+      return;
+    }
+
+    // Construir filas por empleado
+    const empRows=idsSeleccionados.map(id=>{
+      const emp=empleados.find(e=>e.id===id);
+      const nombre=emp?emp.nombre:('ID '+id);
+      const brutoMeses=mesesOrdenados.map(mk=>mesesData[mk][id]||0);
+      const totalBruto=brutoMeses.reduce((s,v)=>s+v,0);
+      const mesesConDatos=brutoMeses.filter(v=>v>0).length;
+      // Aguinaldo proporcional: total bruto del período / 12
+      const aguinaldo=totalBruto/12;
+      return{id,nombre,brutoMeses,totalBruto,mesesConDatos,aguinaldo};
+    }).filter(r=>r.totalBruto>0); // omitir empleados sin ningún dato
+
+    if(!empRows.length){
+      alert('Ninguno de los empleados seleccionados tiene registros en este período.');
+      return;
+    }
+
+    aguinaldoCache={anio,mesesOrdenados,empRows,MESES_LABEL,periodoInicio,periodoFin};
+
+    // Render encabezado tabla
+    const thead=document.getElementById('ag-thead');
+    thead.innerHTML='<tr>'
+      +'<th>ID</th><th>Empleado</th>'
+      +mesesOrdenados.map(mk=>{
+        const [y,m]=mk.split('-');
+        return `<th style="text-align:right">${MESES_LABEL[parseInt(m)-1]}<br><span style="font-weight:400;color:var(--text3);font-size:10px">${y}</span></th>`;
+      }).join('')
+      +'<th style="text-align:right">Total bruto</th>'
+      +'<th style="text-align:right;color:var(--accent)">Aguinaldo</th>'
+      +'</tr>';
+
+    // Render filas
+    const tbody=document.getElementById('ag-tbody');
+    tbody.innerHTML=empRows.map(r=>`<tr>
+      <td style="font-family:'DM Mono',monospace;color:var(--text3);font-size:11px">${r.id}</td>
+      <td style="font-weight:500">${r.nombre}</td>
+      ${r.brutoMeses.map(v=>`<td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px">${v?fmtMon(v):'—'}</td>`).join('')}
+      <td style="text-align:right;font-weight:600;font-family:'DM Mono',monospace">${fmtMon(r.totalBruto)}</td>
+      <td style="text-align:right;font-weight:700;font-family:'DM Mono',monospace;color:var(--accent)">${fmtMon(r.aguinaldo)}</td>
+    </tr>`).join('')
+    // Fila totales
+    +'<tr style="border-top:2px solid var(--border2)">'
+    +'<td colspan="2" style="font-weight:700;font-size:12px">TOTAL</td>'
+    +mesesOrdenados.map((_,mi)=>{
+      const tot=empRows.reduce((s,r)=>s+r.brutoMeses[mi],0);
+      return `<td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px;font-weight:600">${tot?fmtMon(tot):'—'}</td>`;
+    }).join('')
+    +`<td style="text-align:right;font-weight:700;font-family:'DM Mono',monospace">${fmtMon(empRows.reduce((s,r)=>s+r.totalBruto,0))}</td>`
+    +`<td style="text-align:right;font-weight:700;font-family:'DM Mono',monospace;color:var(--accent)">${fmtMon(empRows.reduce((s,r)=>s+r.aguinaldo,0))}</td>`
+    +'</tr>';
+
+    // Meta resumen
+    document.getElementById('ag-resumen-meta').innerHTML=
+      `<strong>Período:</strong> Diciembre ${anio-1} — Noviembre ${anio} · `
+      +`<strong>${semanasEncontradas.length} semana(s)</strong> encontradas · `
+      +`<strong>${mesesOrdenados.length} mes(es)</strong> con datos · `
+      +`Total aguinaldo a pagar: <strong style="color:var(--accent)">${fmtMon(empRows.reduce((s,r)=>s+r.aguinaldo,0))}</strong>`;
+
+    document.getElementById('ag-resultado').style.display='block';
+    document.getElementById('ag-export-btn').style.display='';
+
+  }catch(e){alert('Error: '+e.message);}
+}
+
+function exportarAguinaldoExcel(){
+  const {anio,mesesOrdenados,empRows,MESES_LABEL}=aguinaldoCache;
+  if(!empRows)return;
+  const wb=XLSX.utils.book_new();
+  const header=['ID','Empleado',...mesesOrdenados.map(mk=>{
+    const [y,m]=mk.split('-');return MESES_LABEL[parseInt(m)-1]+' '+y;
+  }),'Total Bruto','Aguinaldo (÷12)'];
+  const dataRows=empRows.map(r=>[r.id,r.nombre,...r.brutoMeses.map(v=>Math.round(v)),Math.round(r.totalBruto),Math.round(r.aguinaldo)]);
+  const totRow=['','TOTAL',...mesesOrdenados.map((_,mi)=>Math.round(empRows.reduce((s,r)=>s+r.brutoMeses[mi],0))),
+    Math.round(empRows.reduce((s,r)=>s+r.totalBruto,0)),
+    Math.round(empRows.reduce((s,r)=>s+r.aguinaldo,0))];
+  const ws=XLSX.utils.aoa_to_sheet([
+    ['PLANILLA DE AGUINALDO — Profecha'],
+    ['Período: Diciembre '+(anio-1)+' al 30 de noviembre '+anio],
+    [],
+    header,
+    ...dataRows,
+    totRow
+  ]);
+  ws['!cols']=[{wch:8},{wch:30},...Array(mesesOrdenados.length+2).fill({wch:15})];
+  XLSX.utils.book_append_sheet(wb,ws,'Aguinaldo '+anio);
+  XLSX.writeFile(wb,'Aguinaldo_'+anio+'_Profecha.xlsx');
+}
+
 // Init
 const anioSel=document.getElementById('hist-anio');
 const y=new Date().getFullYear();
@@ -1647,6 +2249,14 @@ try{const sc=localStorage.getItem('planilla_cfg');if(sc)cfg=JSON.parse(sc);}catc
 document.getElementById(cfg.extrasAcumulativas?'extras-acum':'extras-dia').checked=true;
 if(document.getElementById('cfg-extradob'))document.getElementById('cfg-extradob').value=cfg.extraDoble||3.5;
 updateHeader();renderSchedule();renderEmpTable();
+
+// Poblar selector de año de aguinaldo
+(()=>{
+  const sel=document.getElementById('ag-anio');
+  if(!sel)return;
+  const y=new Date().getFullYear();
+  for(let i=y;i>=y-3;i--){const o=document.createElement('option');o.value=i;o.textContent='Aguinaldo '+i+' (dic '+(i-1)+' — nov '+i+')';sel.appendChild(o);}
+})();
 actualizarIndicadorGuardado();
 
 window.addEventListener('beforeunload',e=>{
