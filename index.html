@@ -1665,7 +1665,7 @@ async function autoGuardarHorario(){
 
 async function buscarRangoSemana(hoja, etiqueta){
   try{
-    const d=await sheetsGet(`${hoja}!A1:A2000`);
+    const d=await sheetsGet(`${hoja}!A1:A4000`);
     const rows=d.values||[];
     for(let i=0;i<rows.length;i++){
       if(rows[i][0]&&rows[i][0].includes(etiqueta)){
@@ -1920,7 +1920,7 @@ async function cargarHistorial(){
 
   try{
     // Leer todo el registro — aumentamos a 2000 filas para cubrir años completos
-    const d=await sheetsGet('Registro Semanal!A1:G2000');
+    const d=await sheetsGet('Registro Semanal!A1:G4000');
     const rows=d.values||[];
 
     // Identificar todos los bloques de semanas y filtrar los del mes/año seleccionado
@@ -2110,7 +2110,7 @@ async function calcularAguinaldo(){
   document.getElementById('ag-export-btn').style.display='none';
 
   try{
-    const d=await sheetsGet('Registro Semanal!A1:G2000');
+    const d=await sheetsGet('Registro Semanal!A1:G4000');
     const rows=d.values||[];
 
     // Recopilar semanas que caen en el período, con sus datos por empleado
