@@ -129,14 +129,15 @@ tr:hover td{background:var(--bg)}
     <div class="logo-sub">PROFECHA · Planilla</div>
   </div>
   <nav class="nav">
-    <div class="nav-item active" onclick="nav('horario',this)"><span>▦</span> Horario semanal</div>
+    <div class="nav-item active" onclick="nav('inicio',this)"><span>⌂</span> Inicio</div>
+    <div class="nav-item" onclick="nav('horario',this)"><span>▦</span> Horario semanal</div>
     <div class="nav-item" onclick="nav('calculo',this)"><span>∑</span> Cálculo de pago</div>
     <div class="nav-item" onclick="nav('transferencias',this)"><span>⇄</span> Transferencias</div>
     <div class="nav-item" onclick="nav('billetes',this)"><span>₡</span> Billetes</div>
     <div class="nav-item" onclick="nav('comprobantes',this)"><span>▤</span> Comprobantes</div>
     <div class="nav-item" onclick="nav('historial',this)"><span>◷</span> Historial</div>
     <div class="nav-item" onclick="nav('aguinaldo',this)"><span>✦</span> Aguinaldo</div>
-    <div class="nav-item" onclick="nav('empleados',this)"><span>✦</span> Empleados</div>
+    <div class="nav-item" onclick="nav('empleados',this)"><span>☰</span> Empleados</div>
     <div class="nav-item" onclick="nav('config',this)"><span>◈</span> Configuración</div>
     <div class="nav-item" onclick="nav('guia',this)"><span>?</span> Guía de uso</div>
   </nav>
@@ -147,8 +148,88 @@ tr:hover td{background:var(--bg)}
 
 <main class="main">
 
+<!-- INICIO -->
+<div id="page-inicio" class="page active">
+  <div class="page-header">
+    <div class="page-title">Bienvenido, Profecha</div>
+    <div class="page-sub" id="inicio-fecha-sub">Cargando...</div>
+  </div>
+
+  <!-- Estado de conexión -->
+  <div id="inicio-conn-banner" class="notice" style="margin-bottom:1.25rem;display:none">
+    ⚠ No estás conectado a Google Sheets. Andá a <strong>Configuración</strong> para conectarte y cargar los datos.
+  </div>
+
+  <!-- Semana anterior: resumen de pago -->
+  <div class="card" style="margin-bottom:1rem">
+    <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
+      <span>Última semana procesada</span>
+      <span id="inicio-sem-label" style="font-size:12px;font-weight:400;color:var(--text3)">—</span>
+    </div>
+    <div id="inicio-sin-datos" style="color:var(--text3);font-size:13px;padding:.5rem 0">
+      Calculá la planilla para ver el resumen aquí.
+    </div>
+    <div id="inicio-resumen-grid" style="display:none;grid-template-columns:repeat(4,1fr);gap:.75rem">
+      <div class="bil-card">
+        <div class="bil-den">Bruto total</div>
+        <div class="bil-cant" id="inicio-bruto" style="font-size:22px">—</div>
+      </div>
+      <div class="bil-card">
+        <div class="bil-den">Neto efectivo</div>
+        <div class="bil-cant" id="inicio-ef" style="font-size:22px;color:var(--accent)">—</div>
+      </div>
+      <div class="bil-card">
+        <div class="bil-den">Neto transferencia</div>
+        <div class="bil-cant" id="inicio-tr" style="font-size:22px;color:var(--accent)">—</div>
+      </div>
+      <div class="bil-card">
+        <div class="bil-den">Rebajo CCSS</div>
+        <div class="bil-cant" id="inicio-ccss" style="font-size:22px;color:var(--danger)">—</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Empleados y semana actual -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem">
+    <div class="card">
+      <div class="card-title">Empleados activos</div>
+      <div style="font-size:32px;font-weight:700;font-family:'DM Mono',monospace;color:var(--accent)" id="inicio-n-emp">—</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:4px" id="inicio-emp-sub">—</div>
+      <button class="btn btn-s" style="margin-top:12px;font-size:11px" onclick="navTo('empleados')">Ver empleados →</button>
+    </div>
+    <div class="card">
+      <div class="card-title">Semana en curso</div>
+      <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px" id="inicio-semana-actual">—</div>
+      <div id="inicio-horario-status" style="font-size:12px;color:var(--text3)">—</div>
+      <button class="btn btn-s" style="margin-top:12px;font-size:11px" onclick="navTo('horario')">Ir al horario →</button>
+    </div>
+  </div>
+
+  <!-- Últimos movimientos de salario -->
+  <div class="card">
+    <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
+      <span>Últimos movimientos de salario</span>
+      <button class="btn btn-s" style="font-size:11px;padding:4px 9px" onclick="navTo('empleados');setTimeout(()=>document.getElementById('tab-movimientos')?.click(),150)">Ver todos →</button>
+    </div>
+    <div id="inicio-movimientos" style="font-size:12px;color:var(--text3)">Sin movimientos registrados aún.</div>
+  </div>
+
+  <!-- Accesos rápidos -->
+  <div class="card" style="margin-top:1rem">
+    <div class="card-title">Accesos rápidos</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-p" onclick="navTo('horario')">▦ Horario</button>
+      <button class="btn btn-p" onclick="navTo('calculo')">∑ Calcular planilla</button>
+      <button class="btn btn-p" onclick="navTo('comprobantes')">▤ Comprobantes</button>
+      <button class="btn btn-p" onclick="navTo('transferencias')">⇄ Transferencias</button>
+      <button class="btn btn-s" onclick="navTo('historial')">◷ Historial</button>
+      <button class="btn btn-s" onclick="navTo('aguinaldo')">✦ Aguinaldo</button>
+    </div>
+  </div>
+</div>
+
 <!-- HORARIO -->
-<div id="page-horario" class="page active">
+<div id="page-horario" class="page">
   <div class="page-header">
     <div class="page-title">Horario semanal</div>
     <div class="page-sub">Cargá el reporte ZKteco/BioTime o ingresá horas manualmente. Las filas en rojo tienen una sola checada y requieren revisión.</div>
@@ -378,6 +459,16 @@ tr:hover td{background:var(--bg)}
     <div id="emp-import-status" style="margin-top:.75rem"></div>
   </div>
 
+  <!-- Tabs dentro de Empleados -->
+  <div style="display:flex;gap:6px;margin-bottom:1rem;border-bottom:2px solid var(--border);padding-bottom:0">
+    <button id="tab-base" class="btn btn-p" style="border-radius:6px 6px 0 0;border-bottom:none;font-size:12px"
+      onclick="empTab('base')">Base de empleados</button>
+    <button id="tab-movimientos" class="btn btn-s" style="border-radius:6px 6px 0 0;border-bottom:none;font-size:12px"
+      onclick="empTab('movimientos')">Movimientos de salario</button>
+  </div>
+
+  <!-- BASE DE EMPLEADOS -->
+  <div id="emp-tab-base">
   <div class="card">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:8px">
       <div class="card-title" style="margin-bottom:0">Base de empleados <span id="emp-count" style="font-weight:400;color:var(--text3)"></span></div>
@@ -416,6 +507,22 @@ tr:hover td{background:var(--bg)}
       <button class="btn btn-s" onclick="guardarEmpleados()">Guardar cambios en Sheets</button>
     </div>
   </div>
+
+  </div><!-- /emp-tab-base -->
+
+  <!-- MOVIMIENTOS DE SALARIO -->
+  <div id="emp-tab-movimientos" style="display:none">
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+      <div class="card-title" style="margin-bottom:0">Historial de movimientos</div>
+      <button class="btn btn-s" style="font-size:11px" onclick="exportarMovimientosExcel()">Exportar Excel</button>
+    </div>
+    <div class="tab-wrap">
+      <table><thead><tr><th>Fecha</th><th>ID</th><th>Empleado</th><th>Campo</th><th>Antes</th><th>Después</th></tr></thead>
+      <tbody id="mov-tbody"><tr><td colspan="6" style="text-align:center;color:var(--text3);padding:2rem">Sin movimientos registrados</td></tr></tbody></table>
+    </div>
+  </div>
+  </div><!-- /emp-tab-movimientos -->
 
   <div class="card" id="add-emp-form" style="display:none">
     <div class="card-title">Nuevo empleado</div>
@@ -717,6 +824,7 @@ function nav(id,el){
   document.getElementById('page-'+id).classList.add('active');
   el.classList.add('active');
   if(id==='aguinaldo')agRenderLista();
+  if(id==='inicio')actualizarInicio();
 }
 
 function updateHeader(){
@@ -1091,6 +1199,12 @@ function calcularPago(){
   document.getElementById('m-neto-ef').textContent=fmtMon(totEf);
   document.getElementById('m-neto-tr').textContent=fmtMon(totTr);
   renderCalculo();renderTransferencias();renderBilletes();renderComprobantes();
+  // Guardar resumen de esta semana para el panel de inicio
+  try{
+    const wkKey=weekKey();
+    localStorage.setItem('planilla_resumen_'+wkKey, JSON.stringify({bruto:totBruto,ef:totEf,tr:totTr,ccss:totCCSS}));
+  }catch(e){}
+  actualizarInicio();
 
   // Alerta de empleados activos sin ninguna hora cargada esta semana
   const wData2=horarioActual[weekKey()]||{};
@@ -1418,9 +1532,13 @@ function limpiarFiltrosEmp(){
 }
 
 function updateEmp(i,field,val){
-  if(field==='horaBase'||field==='fijo')empleados[i][field]=parseFloat(val)||0;
-  else empleados[i][field]=val;
-  // Si ya hay resultados calculados, recalcular silenciosamente
+  const antes = empleados[i][field];
+  const nuevo = (field==='horaBase'||field==='fijo') ? (parseFloat(val)||0) : val;
+  if(String(antes)!==String(nuevo)){
+    const labels={'horaBase':'Hora base','fijo':'Fijo semanal'};
+    registrarMovimiento(empleados[i].id, empleados[i].nombre, labels[field]||field, antes, nuevo);
+  }
+  empleados[i][field]=nuevo;
   if(resultados.length) recalcularSilencioso();
 }
 
@@ -1484,6 +1602,12 @@ function recalcularSilencioso(){
   document.getElementById('m-neto-ef').textContent=fmtMon(totEf);
   document.getElementById('m-neto-tr').textContent=fmtMon(totTr);
   renderCalculo();renderTransferencias();renderBilletes();renderComprobantes();
+  // Guardar resumen de esta semana para el panel de inicio
+  try{
+    const wkKey=weekKey();
+    localStorage.setItem('planilla_resumen_'+wkKey, JSON.stringify({bruto:totBruto,ef:totEf,tr:totTr,ccss:totCCSS}));
+  }catch(e){}
+  actualizarInicio();
   // Indicador visual discreto en vez de alert
   const ind=document.getElementById('recalc-indicator');
   if(ind){ind.textContent='↻ Actualizado';ind.style.opacity='1';setTimeout(()=>ind.style.opacity='0',2000);}
@@ -1519,6 +1643,21 @@ function saveEmpleado(){
   const emp={id:empId,nombre,cedula:document.getElementById('ne-cedula').value.trim(),puesto:document.getElementById('ne-puesto').value.trim().toUpperCase(),cuenta:document.getElementById('ne-cuenta').value.trim()||'N/A',horaBase:parseFloat(document.getElementById('ne-hora').value)||0,fijo:parseFloat(document.getElementById('ne-fijo').value)||0,ccss:document.getElementById('ne-ccss').value,pago:document.getElementById('ne-pago').value,nota:document.getElementById('ne-nota').value};
   if(editingEmp!==null)empleados[editingEmp]=emp;
   else{const existing=empleados.findIndex(e=>e.id===empId);if(existing>=0)empleados[existing]=emp;else empleados.push(emp);}
+  // Registrar movimientos si cambió algo relevante
+  if(editingEmp!==null){
+    const old=empleados[editingEmp];
+    const campos={
+      'Hora base':[old.horaBase, parseNum(document.getElementById('ef-hora').value)],
+      'Fijo semanal':[old.fijo, parseNum(document.getElementById('ef-fijo').value)],
+      'Puesto':[old.puesto, (document.getElementById('ef-puesto').value||'').trim()],
+      'CCSS':[old.ccss, document.getElementById('ef-ccss').checked?'X':''],
+      'Pago':[old.pago, document.getElementById('ef-pago').value],
+      'Nota':[old.nota, document.getElementById('ef-nota').value],
+    };
+    Object.entries(campos).forEach(([campo,[antes,despues]])=>{
+      if(String(antes)!==String(despues)) registrarMovimiento(old.id,old.nombre,campo,antes,despues);
+    });
+  }
   editingEmp=null;
   renderEmpTable();renderSchedule();
   document.getElementById('add-emp-form').style.display='none';
@@ -1591,7 +1730,7 @@ function conectar(){
     const tc=google.accounts.oauth2.initTokenClient({client_id:CLIENT_ID,scope:SCOPES,callback:(resp)=>{
       if(resp.error){setConnected(false);alert('Error: '+resp.error);return;}
       accessToken=resp.access_token;setConnected(true);
-      inicializarSheets().then(()=>loadEmpleados());
+      inicializarSheets().then(()=>autoCargarAlConectar());
     }});
     tc.requestAccessToken({prompt:'consent'});
   };
@@ -2242,15 +2381,211 @@ function exportarAguinaldoExcel(){
   XLSX.writeFile(wb,'Aguinaldo_'+anio+'_Profecha.xlsx');
 }
 
+
+// ── Movimientos de salario ─────────────────────────────────────────
+let movimientos = []; // [{fecha, empId, nombre, campo, antes, despues}]
+
+function registrarMovimiento(empId, nombre, campo, antes, despues){
+  if(String(antes) === String(despues)) return;
+  const fecha = new Date().toLocaleDateString('es-CR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  movimientos.unshift({fecha, empId, nombre, campo, antes: String(antes), despues: String(despues)});
+  // Keep last 500
+  if(movimientos.length > 500) movimientos = movimientos.slice(0,500);
+  try{ localStorage.setItem('planilla_movimientos', JSON.stringify(movimientos)); }catch(e){}
+  renderMovimientos();
+  renderInicioMovimientos();
+}
+
+function renderMovimientos(){
+  const tbody = document.getElementById('mov-tbody');
+  if(!tbody) return;
+  tbody.innerHTML = movimientos.length
+    ? movimientos.map(m=>`<tr>
+        <td style="font-size:11px;color:var(--text3);white-space:nowrap">${m.fecha}</td>
+        <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3)">${m.empId}</td>
+        <td style="font-size:12px;font-weight:500">${m.nombre}</td>
+        <td style="font-size:12px">${m.campo}</td>
+        <td style="font-family:'DM Mono',monospace;font-size:12px;color:var(--danger)">${m.antes}</td>
+        <td style="font-family:'DM Mono',monospace;font-size:12px;color:var(--accent);font-weight:600">${m.despues}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:2rem">Sin movimientos registrados</td></tr>';
+}
+
+function exportarMovimientosExcel(){
+  if(!movimientos.length){alert('Sin movimientos para exportar.');return;}
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([
+    ['Fecha','ID','Empleado','Campo modificado','Valor anterior','Valor nuevo'],
+    ...movimientos.map(m=>[m.fecha,m.empId,m.nombre,m.campo,m.antes,m.despues])
+  ]);
+  ws['!cols']=[{wch:22},{wch:6},{wch:30},{wch:18},{wch:16},{wch:16}];
+  XLSX.utils.book_append_sheet(wb,ws,'Movimientos');
+  XLSX.writeFile(wb,'Movimientos_Salarios_Profecha.xlsx');
+}
+
+function empTab(tab){
+  document.getElementById('emp-tab-base').style.display       = tab==='base'        ? '' : 'none';
+  document.getElementById('emp-tab-movimientos').style.display = tab==='movimientos' ? '' : 'none';
+  document.getElementById('tab-base').className        = tab==='base'        ? 'btn btn-p' : 'btn btn-s';
+  document.getElementById('tab-movimientos').className  = tab==='movimientos' ? 'btn btn-p' : 'btn btn-s';
+  document.getElementById('tab-base').style.cssText        = 'border-radius:6px 6px 0 0;border-bottom:none;font-size:12px';
+  document.getElementById('tab-movimientos').style.cssText  = 'border-radius:6px 6px 0 0;border-bottom:none;font-size:12px';
+  if(tab==='movimientos') renderMovimientos();
+}
+
+// ── Panel de inicio ────────────────────────────────────────────────
+function navTo(id){
+  const navItem = [...document.querySelectorAll('.nav-item')].find(el=>el.getAttribute('onclick')&&el.getAttribute('onclick').includes("'"+id+"'"));
+  if(navItem) nav(id, navItem);
+}
+
+function actualizarInicio(){
+  // Fecha actual
+  const hoy = new Date();
+  document.getElementById('inicio-fecha-sub').textContent =
+    'Hoy es ' + hoy.toLocaleDateString('es-CR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
+
+  // Estado de conexión
+  const connBanner = document.getElementById('inicio-conn-banner');
+  if(connBanner) connBanner.style.display = accessToken ? 'none' : '';
+
+  // Empleados activos
+  document.getElementById('inicio-n-emp').textContent = empleados.length || '—';
+  document.getElementById('inicio-emp-sub').textContent = empleados.length
+    ? empleados.filter(e=>e.ccss==='X').length + ' asegurados CCSS · ' +
+      empleados.filter(e=>e.pago==='transferencia').length + ' con transferencia'
+    : 'Cargá empleados desde Sheets';
+
+  // Semana anterior (la que se procesó el lunes)
+  const semAnt = addDays(getWeekStart(hoy), -7);
+  const semAntEnd = addDays(semAnt, 6);
+  const semAntLabel = fmtDate(semAnt) + ' — ' + fmtDate(semAntEnd);
+  document.getElementById('inicio-sem-label').textContent = semAntLabel;
+
+  // Semana actual en curso
+  const semActual = getWeekStart(hoy);
+  document.getElementById('inicio-semana-actual').textContent =
+    fmtDate(semActual) + ' — ' + fmtDate(addDays(semActual,6));
+
+  // Estado del horario de esta semana
+  const wk = semActual.toISOString().split('T')[0];
+  const wData = horarioActual[wk]||{};
+  const tieneHoras = Object.keys(wData).some(k=>!k.endsWith('_fer')&&
+    Object.keys(wData[k]).some(dk=>dk.startsWith('d')));
+  document.getElementById('inicio-horario-status').innerHTML = tieneHoras
+    ? '<span style="color:var(--accent)">✓ Horario cargado</span>'
+    : '<span style="color:var(--text3)">Sin horas cargadas aún</span>';
+
+  // Resumen de la semana anterior (desde resultados si coincide, sino desde Sheets caché)
+  const semAntKey = semAnt.toISOString().split('T')[0];
+  const savedSemAnt = (() => {
+    try{ const s=localStorage.getItem('planilla_resumen_'+semAntKey); return s?JSON.parse(s):null; }catch(e){return null;}
+  })();
+
+  if(savedSemAnt){
+    document.getElementById('inicio-sin-datos').style.display='none';
+    document.getElementById('inicio-resumen-grid').style.display='grid';
+    document.getElementById('inicio-bruto').textContent = fmtMon(savedSemAnt.bruto);
+    document.getElementById('inicio-ef').textContent    = fmtMon(savedSemAnt.ef);
+    document.getElementById('inicio-tr').textContent    = fmtMon(savedSemAnt.tr);
+    document.getElementById('inicio-ccss').textContent  = fmtMon(savedSemAnt.ccss);
+  } else {
+    document.getElementById('inicio-sin-datos').style.display='';
+    document.getElementById('inicio-resumen-grid').style.display='none';
+  }
+
+  renderInicioMovimientos();
+}
+
+function renderInicioMovimientos(){
+  const el = document.getElementById('inicio-movimientos');
+  if(!el) return;
+  if(!movimientos.length){
+    el.innerHTML = 'Sin movimientos registrados aún.';
+    return;
+  }
+  el.innerHTML = movimientos.slice(0,5).map(m=>
+    `<div style="display:flex;gap:10px;align-items:baseline;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px">
+      <span style="color:var(--text3);font-size:11px;white-space:nowrap;min-width:120px">${m.fecha}</span>
+      <span style="font-weight:500;flex:1">${m.nombre}</span>
+      <span style="color:var(--text3)">${m.campo}:</span>
+      <span style="color:var(--danger);font-family:'DM Mono',monospace">${m.antes}</span>
+      <span style="color:var(--text3)">→</span>
+      <span style="color:var(--accent);font-weight:600;font-family:'DM Mono',monospace">${m.despues}</span>
+    </div>`
+  ).join('');
+}
+
+// ── Auto-carga al conectar ─────────────────────────────────────────
+async function autoCargarAlConectar(){
+  // 1. Empleados (siempre)
+  try{
+    const d = await sheetsGet('Base Datos!A2:J200');
+    const rows = (d.values||[]).filter(r=>r[0]&&r[1]);
+    empleados = rows.map(r=>({
+      id:String(r[0]),nombre:String(r[1]),cedula:r[2]||'',puesto:r[3]||'',
+      cuenta:r[4]||'N/A',horaBase:parseNum(r[5]),fijo:parseNum(r[6]),
+      ccss:r[7]||'',pago:r[8]||'efectivo',nota:r[9]||''
+    }));
+    // Cache en localStorage
+    try{ localStorage.setItem('planilla_empleados_cache', JSON.stringify(empleados)); }catch(e){}
+    renderEmpTable(); renderSchedule();
+  }catch(e){ console.warn('autoCargar empleados falló:', e.message); }
+
+  // 2. Horario de la semana ANTERIOR (la relevante al abrir)
+  const semAnt = addDays(getWeekStart(new Date()), -7);
+  const semAntEnd = addDays(semAnt, 6);
+  const etiqueta = fmtDate(semAnt) + ' — ' + fmtDate(semAntEnd);
+  const wk = semAnt.toISOString().split('T')[0];
+
+  try{
+    const d = await sheetsGet('Horarios!A1:Q4000');
+    const rows = d.values||[];
+    for(let i=0;i<rows.length;i++){
+      if(rows[i][0] && String(rows[i][0]).includes(etiqueta)){
+        if(!horarioActual[wk]) horarioActual[wk]={};
+        let j=i+1;
+        while(j<rows.length && rows[j] && rows[j][0] && !String(rows[j][0]).startsWith('Semana')){
+          const row=rows[j];
+          const empId=String(row[0]||'').trim();
+          if(empId){
+            const nombre=row[1]||'';
+            horarioActual[wk][empId]={nombre};
+            for(let d2=0;d2<7;d2++){
+              const ent=row[2+d2*2]; const sal=row[3+d2*2];
+              const entrada=ent!==undefined&&ent!==''?parseHour(ent):null;
+              const salida=sal!==undefined&&sal!==''?parseHour(sal):null;
+              if(entrada!==null||salida!==null) horarioActual[wk][empId]['d'+d2]={entrada,salida};
+            }
+          }
+          j++;
+        }
+        break;
+      }
+    }
+    // Si el horario de la semana anterior ya está en memoria, ponemos la app en esa semana
+    if(horarioActual[wk] && Object.keys(horarioActual[wk]).length>0){
+      currentWeekStart = semAnt;
+      updateHeader();
+      renderSchedule();
+    }
+  }catch(e){ console.warn('autoCargar horario falló:', e.message); }
+
+  actualizarInicio();
+}
+
 // Init
 const anioSel=document.getElementById('hist-anio');
 const y=new Date().getFullYear();
 for(let i=y;i>=y-4;i--){const o=document.createElement('option');o.value=i;o.textContent=i;anioSel.appendChild(o);}
 document.getElementById('hist-mes').value=new Date().getMonth()+1;
 try{const sc=localStorage.getItem('planilla_cfg');if(sc)cfg=JSON.parse(sc);}catch(e){}
+try{const sm=localStorage.getItem('planilla_movimientos');if(sm){movimientos=JSON.parse(sm);renderMovimientos();}}catch(e){}
+// Cache de empleados para mostrar aunque no haya conexión aún
+try{const se=localStorage.getItem('planilla_empleados_cache');if(se&&!empleados.length){empleados=JSON.parse(se);renderEmpTable();renderSchedule();}}catch(e){}
 document.getElementById(cfg.extrasAcumulativas?'extras-acum':'extras-dia').checked=true;
 if(document.getElementById('cfg-extradob'))document.getElementById('cfg-extradob').value=cfg.extraDoble||3.5;
-updateHeader();renderSchedule();renderEmpTable();
+updateHeader();renderSchedule();renderEmpTable();actualizarInicio();
 
 // Poblar selector de año de aguinaldo
 (()=>{
