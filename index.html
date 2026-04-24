@@ -749,6 +749,61 @@ tr:hover td{background:var(--bg)}
     </div>
   </div>
 
+
+  <div class="card" style="border:2px solid var(--warn);background:var(--warn-l)">
+    <div class="card-title" style="color:var(--warn-d)">⚠ Cierre anual — Procedimiento de enero 2027 (y cada año)</div>
+    <div style="font-size:13px;color:var(--text2);line-height:1.9">
+
+      <strong style="color:var(--text)">¿Por qué hacer el cierre?</strong><br>
+      La app lee hasta 4,000 filas del Google Sheets. Con el ritmo actual (~55 filas por semana) ese límite se alcanza alrededor del año 2027. El cierre anual limpia el historial usado y libera espacio para el año siguiente, sin perder ningún dato.<br><br>
+
+      <strong style="color:var(--text)">¿Cuándo hacerlo?</strong><br>
+      En la primera semana de enero del año siguiente, <em>después</em> de calcular y guardar normalmente esa primera semana. No antes — la primera semana de enero ya pertenece al aguinaldo del año que inicia.<br><br>
+
+      <strong style="color:var(--text)">Pasos exactos (en orden, no saltear ninguno):</strong><br>
+      <div style="display:grid;grid-template-columns:24px 1fr;gap:6px;margin-top:.5rem">
+        <span style="background:var(--accent);color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;flex-shrink:0">1</span>
+        <span>Calculá y guardá normalmente la primera semana de enero del año nuevo. Esto asegura que el historial esté al día.</span>
+        <span style="background:var(--accent);color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;flex-shrink:0">2</span>
+        <span><strong style="color:var(--text)">Exportá el aguinaldo del año que cerró</strong> desde la pestaña Aguinaldo → seleccioná el año → Calcular → Exportar Excel. Guardá ese archivo en un lugar seguro (Drive, USB, correo). Una vez que limpiés Sheets, la app no podrá recalcularlo.</span>
+        <span style="background:var(--accent);color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;flex-shrink:0">3</span>
+        <span><strong style="color:var(--text)">Descargá una copia completa del Google Sheets</strong> como backup: en Sheets → Archivo → Descargar → Microsoft Excel (.xlsx). Guardala con el nombre del año, ej. <em>Profecha_Backup_2026.xlsx</em>.</span>
+        <span style="background:var(--warn);color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;flex-shrink:0">4</span>
+        <span><strong style="color:var(--text)">En Google Sheets, borrá las filas del período dic año anterior → nov año cerrado</strong> en estas tres hojas (en ese orden):<br>
+          &nbsp;&nbsp;• <strong>Registro Semanal</strong> — Borrá desde la fila de la semana del 01 dic hasta la última semana de noviembre inclusive.<br>
+          &nbsp;&nbsp;• <strong>Horarios</strong> — Mismo rango de semanas.<br>
+          &nbsp;&nbsp;• <strong>Transferencias</strong> — Mismo rango.<br>
+          <em>Tip: usá Ctrl+Click para seleccionar múltiples filas y luego clic derecho → Eliminar filas.</em>
+        </span>
+        <span style="background:var(--accent);color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;flex-shrink:0">5</span>
+        <span><strong style="color:var(--text)">NO toques la hoja Base Datos.</strong> Los empleados, salarios y configuraciones se mantienen intactos.</span>
+        <span style="background:var(--accent);color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;flex-shrink:0">6</span>
+        <span>Volvé a la app, conectate a Sheets normalmente y verificá que el Historial del nuevo año muestre solo las semanas del nuevo período. La app queda lista para otro año completo.</span>
+      </div><br>
+
+      <strong style="color:var(--text)">Lo que se conserva vs. lo que se borra:</strong><br>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:.5rem">
+        <div style="background:var(--surface2);border-radius:6px;padding:.75rem">
+          <div style="font-weight:600;color:var(--accent);margin-bottom:.35rem">✓ Se conserva</div>
+          Base Datos (empleados y salarios)<br>
+          Backup local que descargaste<br>
+          Excel del aguinaldo exportado<br>
+          Semanas de dic en adelante del año nuevo
+        </div>
+        <div style="background:var(--surface2);border-radius:6px;padding:.75rem">
+          <div style="font-weight:600;color:var(--danger);margin-bottom:.35rem">✗ Se borra de Sheets</div>
+          Historial de horarios del año cerrado<br>
+          Registro semanal del año cerrado<br>
+          Transferencias del año cerrado<br>
+          <em style="font-size:11px">(Pero quedan en el backup local)</em>
+        </div>
+      </div><br>
+
+      <strong style="color:var(--text)">Sobre el aguinaldo y los años:</strong><br>
+      El selector de año en la pestaña Aguinaldo se actualiza automáticamente cada año — no hay que tocar el código. El aguinaldo 2027 cubre dic 2026 → nov 2027 y así sucesivamente.
+    </div>
+  </div>
+
   <div class="card">
     <div class="card-title">Contacto y soporte</div>
     <div style="font-size:13px;color:var(--text2);line-height:1.9">
