@@ -1750,25 +1750,113 @@ function generarExcelTransferencias(){
 
 async function cargarHistorial(){
   if(!accessToken){toast('Conectate primero en Configuración','warn');return;}
+  const mesEl=document.getElementById('hist-mes');
+  const anioEl=document.getElementById('hist-anio');
+  const mesSel=parseInt(mesEl.value)-1; // 0-based
+  const anioSel=parseInt(anioEl.value);
+  const mesNombre=mesEl.options[mesEl.selectedIndex].text;
+
+  document.getElementById('hist-body').innerHTML=
+    '<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:2rem">Cargando...</td></tr>';
+
   try{
-    const d=await sheetsGet('Registro Semanal!A1:F500');
-    const rows=d.values||[];const empMap={};let semN=0;
-    rows.forEach(row=>{
-      if(row[0]&&String(row[0]).startsWith('Semana')){semN++;return;}
-      if(!row[1]||!semN)return;
-      if(!empMap[row[1]])empMap[row[1]]={sems:{},bruto:0,ccss:0};
-      empMap[row[1]].sems[semN]=(empMap[row[1]].sems[semN]||0)+(parseFloat(row[5])||0);
-      empMap[row[1]].bruto+=parseFloat(row[5])||0;
-      empMap[row[1]].ccss+=parseFloat(row[4])||0;
+    const d=await sheetsGet('Registro Semanal!A1:G4000');
+    const rows=d.values||[];
+
+    // Filtrar semanas del mes/año seleccionado por fecha real
+    const semanasDelMes=[];
+    let i=0;
+    while(i<rows.length){
+      const cell=rows[i]&&rows[i][0]?String(rows[i][0]).trim():'';
+      if(cell.startsWith('Semana')){
+        const parsed=parsearEtiquetaSemana(cell.replace('Semana del ',''));
+        if(parsed&&parsed.mes0===mesSel&&parsed.anio===anioSel){
+          let j=i+1;const dataRows=[];
+          while(j<rows.length){
+            const nc=rows[j]&&rows[j][0]?String(rows[j][0]).trim():'';
+            if(!rows[j]||!rows[j][0]||nc.startsWith('Semana'))break;
+            dataRows.push(rows[j]);j++;
+          }
+          semanasDelMes.push({label:cell.replace('Semana del ',''),dataRows});
+          i=j;
+        }else{i++;}
+      }else{i++;}
+    }
+
+    if(!semanasDelMes.length){
+      document.getElementById('hist-body').innerHTML=
+        '<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:2rem">Sin registros para '+mesNombre+' '+anioSel+'</td></tr>';
+      document.getElementById('hist-meta').style.display='none';
+      document.getElementById('hist-export-btn').style.display='none';
+      return;
+    }
+
+    // Consolidar por empleado
+    const empMap={};
+    semanasDelMes.forEach((sem,idx)=>{
+      sem.dataRows.forEach(row=>{
+        if(!row[1])return;
+        const nombre=String(row[1]);
+        if(!empMap[nombre])empMap[nombre]={sems:{},bruto:0,ccss:0};
+        const brutoSem=parseFloat(row[5])||0,ccssSem=parseFloat(row[4])||0;
+        empMap[nombre].sems[idx+1]=(empMap[nombre].sems[idx+1]||0)+brutoSem;
+        empMap[nombre].bruto+=brutoSem;
+        empMap[nombre].ccss+=ccssSem;
+      });
     });
-    const entries=Object.entries(empMap);
-    document.getElementById('hist-body').innerHTML=entries.length?entries.map(([nombre,data])=>`<tr>
+
+    historialCache={semanas:semanasDelMes,empMap,mesLabel:mesNombre+' '+anioSel};
+
+    // Encabezados dinámicos con fechas reales
+    const numSems=semanasDelMes.length;
+    document.getElementById('hist-thead').innerHTML='<tr><th>Empleado</th>'+
+      semanasDelMes.map((s,i)=>`<th style="text-align:right;font-size:10px">Sem ${i+1}<br><span style="font-weight:400;color:var(--text3)">${s.label}</span></th>`).join('')+
+      Array(Math.max(0,5-numSems)).fill('<th></th>').join('')+
+      '<th style="text-align:right">Total bruto</th><th style="text-align:right">Total CCSS</th></tr>';
+
+    // Meta resumen
+    const totalBruto=Object.values(empMap).reduce((s,e)=>s+e.bruto,0);
+    const totalCCSS=Object.values(empMap).reduce((s,e)=>s+e.ccss,0);
+    const metaEl=document.getElementById('hist-meta');
+    metaEl.style.display='block';
+    metaEl.innerHTML=`<strong>${semanasDelMes.length} semana(s)</strong> en ${mesNombre} ${anioSel} · Bruto total: <strong>${fmtMon(totalBruto)}</strong> · CCSS total: <strong style="color:var(--danger)">${fmtMon(totalCCSS)}</strong>`;
+
+    // Tabla
+    const entries=Object.entries(empMap).sort((a,b)=>a[0].localeCompare(b[0]));
+    const totalCols=Math.max(5,numSems);
+    document.getElementById('hist-body').innerHTML=entries.map(([nombre,data])=>`<tr>
       <td style="font-weight:500">${nombre}</td>
-      ${[1,2,3,4,5].map(i=>`<td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px">${data.sems[i]?fmtMon(data.sems[i]):'—'}</td>`).join('')}
+      ${Array.from({length:totalCols},(_,i)=>`<td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px">${data.sems[i+1]?fmtMon(data.sems[i+1]):'—'}</td>`).join('')}
       <td style="text-align:right;font-weight:600;font-family:'DM Mono',monospace">${fmtMon(data.bruto)}</td>
       <td style="text-align:right;color:var(--danger);font-family:'DM Mono',monospace">${fmtMon(data.ccss)}</td>
-    </tr>`).join(''):'<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:2rem">Sin datos</td></tr>';
+    </tr>`).join('')
+    +'<tr style="border-top:2px solid var(--border2)">'
+    +'<td style="font-weight:700;font-size:12px">TOTAL</td>'
+    +Array.from({length:totalCols},(_,i)=>{const t=entries.reduce((s,[,d])=>s+(d.sems[i+1]||0),0);return`<td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px;font-weight:600">${t?fmtMon(t):'—'}</td>`;}).join('')
+    +`<td style="text-align:right;font-weight:700;font-family:'DM Mono',monospace">${fmtMon(totalBruto)}</td>`
+    +`<td style="text-align:right;font-weight:700;font-family:'DM Mono',monospace;color:var(--danger)">${fmtMon(totalCCSS)}</td>`
+    +'</tr>';
+
+    document.getElementById('hist-export-btn').style.display='';
+
   }catch(e){toast('Error: '+e.message,'err');}
+}
+
+function exportarHistorialExcel(){
+  const{semanas,empMap,mesLabel}=historialCache;
+  if(!semanas||!semanas.length){toast('Cargá el historial primero','warn');return;}
+  const wb=XLSX.utils.book_new();
+  const numSems=semanas.length;
+  const header=['Empleado',...semanas.map((s,i)=>'Sem '+(i+1)+': '+s.label),'Total Bruto','Total CCSS'];
+  const dataRows=Object.entries(empMap).sort((a,b)=>a[0].localeCompare(b[0])).map(([nombre,data])=>[
+    nombre,...Array.from({length:numSems},(_,i)=>data.sems[i+1]||0),Math.round(data.bruto),Math.round(data.ccss)]);
+  const totRow=['TOTAL',...Array.from({length:numSems},(_,i)=>Math.round(Object.values(empMap).reduce((s,e)=>s+(e.sems[i+1]||0),0))),
+    Math.round(Object.values(empMap).reduce((s,e)=>s+e.bruto,0)),
+    Math.round(Object.values(empMap).reduce((s,e)=>s+e.ccss,0))];
+  const ws=XLSX.utils.aoa_to_sheet([header,...dataRows,totRow]);
+  ws['!cols']=[{wch:30},...Array(numSems+2).fill({wch:16})];
+  XLSX.utils.book_append_sheet(wb,ws,'Historial '+mesLabel);
+  XLSX.writeFile(wb,'Historial_'+mesLabel.replace(/ /g,'_')+'.xlsx');
 }
 
 function setExtrasMode(mode){
