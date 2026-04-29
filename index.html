@@ -426,7 +426,26 @@ tr:hover td{background:var(--bg)}
   </div>
   <div id="emp-tab-base">
   <div class="card">
-    <div class="card-title">Base de empleados <span id="emp-count" style="font-weight:400;color:var(--text3)"></span></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;flex-wrap:wrap;gap:8px">
+      <div class="card-title" style="margin-bottom:0">Base de empleados <span id="emp-count" style="font-weight:400;color:var(--text3)"></span></div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        <input type="text" id="emp-search" placeholder="🔍 Buscar nombre..." oninput="filtrarEmpleados()"
+          style="font-size:12px;padding:5px 9px;border:1px solid var(--border2);border-radius:var(--rs);background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif;width:170px">
+        <select id="emp-f-puesto" onchange="filtrarEmpleados()" style="font-size:12px;padding:5px 8px;border:1px solid var(--border2);border-radius:var(--rs);background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif">
+          <option value="">Puesto: todos</option>
+        </select>
+        <select id="emp-f-ccss" onchange="filtrarEmpleados()" style="font-size:12px;padding:5px 8px;border:1px solid var(--border2);border-radius:var(--rs);background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif">
+          <option value="">CCSS: todos</option><option value="X">Asegurado</option><option value="_no">No asegurado</option>
+        </select>
+        <select id="emp-f-pago" onchange="filtrarEmpleados()" style="font-size:12px;padding:5px 8px;border:1px solid var(--border2);border-radius:var(--rs);background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif">
+          <option value="">Pago: todos</option><option value="efectivo">Efectivo</option><option value="transferencia">Transferencia</option>
+        </select>
+        <select id="emp-f-nota" onchange="filtrarEmpleados()" style="font-size:12px;padding:5px 8px;border:1px solid var(--border2);border-radius:var(--rs);background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif">
+          <option value="">Especial: todos</option><option value="supervisor">Supervisor</option><option value="split">Split</option><option value="_none">Sin especial</option>
+        </select>
+        <button class="btn btn-s" onclick="limpiarFiltrosEmp()" style="font-size:11px;padding:5px 9px">✕</button>
+      </div>
+    </div>
     <div class="tab-wrap">
       <table><thead><tr><th>ID Reloj</th><th>Nombre</th><th>Cédula</th><th>Puesto</th><th>H. Base (₡)</th><th>Fijo sem. (₡)</th><th>CCSS</th><th>Pago</th><th>Especial</th><th>Acciones</th></tr></thead>
       <tbody id="emp-tbody"><tr><td colspan="10" style="text-align:center;color:var(--text3);padding:2rem">Sin empleados cargados</td></tr></tbody></table>
@@ -1278,7 +1297,58 @@ function descargarPlantilla(){
   XLSX.writeFile(wb,'plantilla_empleados_profecha.xlsx');
 }
 
+function actualizarFiltrosPuesto(){
+  const sel=document.getElementById('emp-f-puesto');if(!sel)return;
+  const actual=sel.value;
+  const puestos=[...new Set(empleados.map(e=>e.puesto).filter(Boolean))].sort();
+  sel.innerHTML='<option value="">Puesto: todos</option>'+puestos.map(p=>`<option value="${p}"${p===actual?' selected':''}>${p}</option>`).join('');
+}
+
+function filtrarEmpleados(){
+  const search=(document.getElementById('emp-search')?.value||'').toLowerCase();
+  const fPuesto=document.getElementById('emp-f-puesto')?.value||'';
+  const fCCSS=document.getElementById('emp-f-ccss')?.value||'';
+  const fPago=document.getElementById('emp-f-pago')?.value||'';
+  const fNota=document.getElementById('emp-f-nota')?.value||'';
+  const filtered=empleados.filter((e,i)=>{
+    if(search&&!e.nombre.toLowerCase().includes(search)&&!e.id.includes(search))return false;
+    if(fPuesto&&e.puesto!==fPuesto)return false;
+    if(fCCSS==='X'&&e.ccss!=='X')return false;
+    if(fCCSS==='_no'&&e.ccss==='X')return false;
+    if(fPago&&e.pago!==fPago)return false;
+    if(fNota==='_none'&&e.nota)return false;
+    if(fNota&&fNota!=='_none'&&e.nota!==fNota)return false;
+    return true;
+  });
+  const idxMap=filtered.map(e=>empleados.indexOf(e));
+  document.getElementById('emp-count').textContent=`(${filtered.length} de ${empleados.length})`;
+  document.getElementById('emp-tbody').innerHTML=filtered.length
+    ?idxMap.map(i=>{const e=empleados[i];return`<tr>
+      <td style="font-family:'DM Mono',monospace;color:var(--text3)">${e.id}</td>
+      <td style="font-weight:500">${e.nombre}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:12px">${e.cedula||'—'}</td>
+      <td style="font-size:12px">${e.puesto||'—'}</td>
+      <td><input class="edit-inp" value="${e.horaBase||0}" onchange="updateEmp(${i},'horaBase',this.value)" style="width:90px"></td>
+      <td><input class="edit-inp" value="${e.fijo||0}" onchange="updateEmp(${i},'fijo',this.value)" style="width:80px"></td>
+      <td>${e.ccss==='X'?'<span class="badge b-ccss">Sí</span>':'No'}</td>
+      <td>${e.pago==='transferencia'?'<span class="badge b-tr">Transf</span>':'<span class="badge b-ef">Efect</span>'}</td>
+      <td>${e.nota==='split'?'<span class="badge b-split">Split</span>':e.nota==='supervisor'?'<span class="badge b-sup">Sup</span>':'—'}</td>
+      <td style="display:flex;gap:4px">
+        <button class="btn btn-warn" onclick="editEmpModal(${i})">Editar</button>
+        <button class="btn btn-d" onclick="removeEmp(${i})">Quitar</button>
+      </td>
+    </tr>`;}).join('')
+    :'<tr><td colspan="10" style="text-align:center;color:var(--text3);padding:2rem">Sin resultados para los filtros aplicados</td></tr>';
+}
+
+function limpiarFiltrosEmp(){
+  const ids=['emp-search','emp-f-puesto','emp-f-ccss','emp-f-pago','emp-f-nota'];
+  ids.forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  renderEmpTable();
+}
+
 function renderEmpTable(){
+  actualizarFiltrosPuesto();
   document.getElementById('emp-count').textContent=`(${empleados.length})`;
   document.getElementById('emp-tbody').innerHTML=empleados.length?empleados.map((e,i)=>`
     <tr id="emp-row-${i}">
@@ -1449,13 +1519,13 @@ function conectar(){
   s.src='https://accounts.google.com/gsi/client';
   s.onload=()=>{
     const tc=google.accounts.oauth2.initTokenClient({client_id:CLIENT_ID,scope:SCOPES,callback:(resp)=>{
-      if(resp.error){setConnected(false);alert('Error: '+resp.error);return;}
+      if(resp.error){setConnected(false);toast('Error de conexión: '+resp.error,'err',5000);return;}
       accessToken=resp.access_token;setConnected(true);
       inicializarSheets().then(()=>autoCargarAlConectar());
     }});
     tc.requestAccessToken({prompt:'consent'});
   };
-  s.onerror=()=>alert('No se pudo cargar Google Identity Services.');
+  s.onerror=()=>toast('No se pudo cargar Google Identity Services','err',5000);
   document.head.appendChild(s);
 }
 
@@ -1607,7 +1677,7 @@ async function cargarHorarioDesdeSheets(){
     for(let i=0;i<rows.length;i++){
       if(rows[i][0]&&rows[i][0].includes(etiqueta)){bloqueInicio=i;break;}
     }
-    if(bloqueInicio<0){alert(`No hay horario guardado en Sheets para la semana del ${etiqueta}.`);return;}
+    if(bloqueInicio<0){toast('Sin horario guardado en Sheets para esa semana','warn');return;}
 
     // Detectar feriados del encabezado
     const hdrRow=rows[bloqueInicio];
@@ -1642,19 +1712,19 @@ async function cargarHorarioDesdeSheets(){
     horarioPendiente=false;
     actualizarIndicadorGuardado();
     renderSchedule();
-    alert(`Horario de la semana del ${etiqueta} cargado desde Sheets.`);
-  }catch(e){alert('Error cargando horario: '+e.message);}
+    toast('Horario cargado desde Sheets','ok');
+  }catch(e){toast('Error cargando horario: '+e.message,'err');}
 }
 
 function copiarCSV(){
   const tr=resultados.filter(r=>r.netoTr>0&&!r.sinPerfil);
-  if(!tr.length){alert('Sin transferencias calculadas');return;}
-  navigator.clipboard.writeText(tr.map(r=>`${r.nombre}\t${r.emp.cuenta}\t${Math.round(r.netoTr)}`).join('\n')).then(()=>alert('Copiado')).catch(()=>alert('No se pudo copiar'));
+  if(!tr.length){toast('Sin transferencias calculadas','warn');return;}
+  navigator.clipboard.writeText(tr.map(r=>`${r.nombre}\t${r.emp.cuenta}\t${Math.round(r.netoTr)}`).join('\n')).then(()=>toast('Copiado al portapapeles','ok')).catch(()=>toast('No se pudo copiar','warn'));
 }
 
 function imprimirSoloCCSS(){
   const ccssEmps=resultados.filter(r=>!r.sinPerfil&&r.emp&&r.emp.ccss==='X');
-  if(!ccssEmps.length){alert('No hay empleados asegurados CCSS en esta planilla.');return;}
+  if(!ccssEmps.length){toast('Sin empleados CCSS en esta planilla','warn');return;}
 
   const todos=document.querySelectorAll('#comprobantes-list .comprobante');
   const ocultados=[];
@@ -1671,7 +1741,7 @@ function imprimirSoloCCSS(){
 
 function exportarTransferenciasExcel(){
   const tr=resultados.filter(r=>r.netoTr>0&&!r.sinPerfil);
-  if(!tr.length){alert('Sin transferencias calculadas. Calculá la planilla primero.');return;}
+  if(!tr.length){toast('Sin transferencias. Calculá la planilla primero','warn');return;}
 
   // Validación: verificar cuentas y nombres contra Base Datos
   const alertas=[];
@@ -1873,7 +1943,7 @@ function saveConfig(){
   cfg.descH=parseFloat(document.getElementById('cfg-desc-h').value)||8;
   cfg.descD=parseFloat(document.getElementById('cfg-desc-d').value)||48;
   try{localStorage.setItem('planilla_cfg',JSON.stringify(cfg));}catch(e){}
-  alert('Guardado');
+  toast('Parámetros guardados','ok');
 }
 
 // ── Toast system ────────────────────────────────────────────────────
@@ -2195,6 +2265,15 @@ try{const se=localStorage.getItem('planilla_empleados_cache');if(se&&!empleados.
 document.getElementById(cfg.extrasAcumulativas?'extras-acum':'extras-dia').checked=true;
 if(document.getElementById('cfg-extradob'))document.getElementById('cfg-extradob').value=cfg.extraDoble||3.5;
 updateHeader();renderSchedule();renderEmpTable();actualizarInicio();
+// Poblar selector año historial
+(()=>{
+  const sel=document.getElementById('hist-anio');if(!sel)return;
+  const y=new Date().getFullYear();
+  // Set current month as default
+  const mesEl=document.getElementById('hist-mes');
+  if(mesEl)mesEl.value=String(new Date().getMonth()+1);
+  for(let i=y;i>=y-3;i--){const o=document.createElement('option');o.value=i;o.textContent=i;if(i===y)o.selected=true;sel.appendChild(o);}
+})();
 (()=>{
   const sel=document.getElementById('ag-anio');if(!sel)return;
   const y=new Date().getFullYear();
