@@ -113,11 +113,9 @@ tr:hover td{background:var(--bg)}
   .app{display:block}.main{padding:0;overflow:visible}
   body{overflow:visible}
   @page{
-    margin:0;
+    margin:.8cm;
     size:letter portrait;
   }
-  /* Compensate for zero margin with body padding so content isn't cut */
-  body{ padding:.8cm; }
   #page-comprobantes{padding:0;max-width:72%;margin:0 auto}
   .comprobante{height:calc(33.33vh - 1.2rem);border:1px solid #ccc;margin-bottom:.5rem;overflow:hidden;page-break-inside:avoid}
 }
@@ -371,8 +369,8 @@ tr:hover td{background:var(--bg)}
 <div id="page-comprobantes" class="page">
   <div class="page-header"><div class="page-title">Comprobantes de pago</div><div class="page-sub">Imprimí esta página — los empleados firman al retirar su salario.</div></div>
   <div class="abar" style="margin-bottom:1rem">
-    <button class="btn btn-p" onclick="window.print()">Imprimir todos</button>
-    <button class="btn btn-s" onclick="imprimirSoloCCSS()">Imprimir solo asegurados CCSS</button>
+    <button class="btn btn-p" onclick="imprimirComprobantes('todos')">Imprimir todos</button>
+    <button class="btn btn-s" onclick="imprimirComprobantes('ccss')">Imprimir solo asegurados CCSS</button>
   </div>
   <div class="portada" id="portada-comp">
     <img src="https://media-cdn.tripadvisor.com/media/photo-s/04/a0/da/cc/la-fiesta-del-maiz.jpg"
@@ -1730,20 +1728,67 @@ function copiarCSV(){
 }
 
 function imprimirSoloCCSS(){
-  const ccssEmps=resultados.filter(r=>!r.sinPerfil&&r.emp&&r.emp.ccss==='X');
-  if(!ccssEmps.length){toast('Sin empleados CCSS en esta planilla','warn');return;}
+  imprimirComprobantes('ccss');
+}
 
-  const todos=document.querySelectorAll('#comprobantes-list .comprobante');
-  const ocultados=[];
-  todos.forEach(el=>{
-    const empId=el.dataset.empid;
-    const esCCSS=ccssEmps.some(r=>r.empId===empId);
-    if(!esCCSS){el.style.display='none';ocultados.push(el);}
+function imprimirComprobantes(modo){
+  const items=[...document.querySelectorAll('#comprobantes-list .comprobante')];
+  const filtrados=items.filter(c=>{
+    if(modo==='todos')return true;
+    const emp=empleados.find(e=>e.id===c.dataset.empid);
+    return emp&&emp.ccss==='X';
   });
+  if(!filtrados.length){toast('Sin comprobantes para imprimir','warn');return;}
 
-  window.print();
+  // Capturar CSS de la página
+  const estilos=[...document.styleSheets].map(ss=>{
+    try{return[...ss.cssRules].map(r=>r.cssText).join('\n');}catch(e){return'';}
+  }).join('\n');
 
-  ocultados.forEach(el=>el.style.display='');
+  const portadaEl=document.getElementById('portada-comp');
+  const portadaHTML=portadaEl?portadaEl.innerHTML:'';
+
+  const html=`<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title></title>
+<style>
+@page{margin:.8cm;size:letter portrait}
+*{box-sizing:border-box}
+body{margin:0;padding:0;font-family:'DM Sans',Arial,sans-serif;background:#fff;color:#1a1917;
+  --bg:#fff;--surface:#f9f8f6;--surface2:#f2f0ec;--border:#e5e3de;--border2:#ccc;
+  --text:#1a1917;--text2:#4a4845;--text3:#8c8a87;--accent:#2d5a3d;--danger:#c0392b;
+  --warn:#b7791f;--warn-l:#fef3c7;--warn-d:#92400e;--r:10px;--rs:6px}
+${estilos}
+.portada{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  min-height:100vh;page-break-after:always;text-align:center;padding:3cm;position:relative}
+#comprobantes-wrap{max-width:72%;margin:0 auto}
+.comprobante{height:calc(33.33vh - 1.2rem);border:1px solid #ccc;margin-bottom:.5rem;
+  overflow:hidden;page-break-inside:avoid}
+</style>
+</head>
+<body>
+<div class="portada">${portadaHTML}</div>
+<div id="comprobantes-wrap">
+${filtrados.map(c=>c.outerHTML).join('\n')}
+</div>
+<script>
+  window.addEventListener('load',function(){
+    setTimeout(function(){window.print();window.close();},500);
+  });
+<\/script>
+</body>
+</html>`;
+
+  const win=window.open('','_blank','width=900,height=700');
+  if(!win){
+    toast('El navegador bloqueó la ventana emergente — permitila e intentá de nuevo','warn',5000);
+    return;
+  }
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
 }
 
 function exportarTransferenciasExcel(){
