@@ -1450,6 +1450,7 @@ function renderComprobantes(){
       ${r.fijo>0?`<div class="comp-row"><span>Salario fijo / adicional</span><span>${fmtMon(r.fijo)}</span></div>`:''}
       <div class="comp-row" style="font-weight:600"><span>Salario bruto</span><span>${fmtMon(r.bruto)}</span></div>
       ${r.rebajoCC>0?`<div class="comp-row" style="color:var(--danger)"><span>Rebajo CCSS (${cfg.ccss}%)${r.isSplit?' — solo sobre horas normales':''}</span><span>-${fmtMon(r.rebajoCC)}</span></div>`:''}
+      ${r.rebajoRebajo>0?`<div class="comp-row" style="color:var(--danger)"><span>Rebajo préstamo / daño</span><span>-${fmtMon(r.rebajoRebajo)}</span></div>`:''}
       <div class="comp-total"><span>SALARIO NETO</span><span>${fmtMon(r.neto)}</span></div>
       ${r.isSplit?`<div style="margin-top:8px;padding:8px;background:var(--warn-l);border-radius:4px;font-size:11px"><strong>Desglose:</strong> Transferencia (normales - CCSS): ${fmtMon(r.netoTr)} · Efectivo (extras sin rebajo): ${fmtMon(r.netoEf)}</div>`:''}
       <div class="comp-firma">
@@ -1748,9 +1749,16 @@ async function sheetsWrite(range,values){return sheetsReq('PUT',`/values/${encod
 async function loadEmpleados(){
   if(!accessToken){toast('Conectate primero en Configuración','warn');return;}
   try{
-    const d=await sheetsGet('Base Datos!A2:J200');
+    const d=await sheetsGet('Base Datos!A2:K400');
     const rows=(d.values||[]).filter(r=>r[0]&&r[1]);
     empleados=rows.map(r=>({id:String(r[0]),nombre:String(r[1]),cedula:r[2]||'',puesto:r[3]||'',cuenta:r[4]||'N/A',horaBase:parseNum(r[5]),fijo:parseNum(r[6]),ccss:r[7]||'',pago:r[8]||'efectivo',nota:r[9]||''}));
+    FECHAS_INGRESO={};
+    rows.forEach(r=>{
+      const id=String(r[0]);
+      const fecha=r[10]?String(r[10]).trim():'';
+      if(fecha&&fecha!=='-'&&fecha!=='N/A')FECHAS_INGRESO[id]=fecha;
+    });
+    try{localStorage.setItem('planilla_fechas_ingreso',JSON.stringify(FECHAS_INGRESO));}catch(e){}
     renderEmpTable();renderSchedule();
     toast('Empleados cargados: '+empleados.length,'ok');
   }catch(e){toast('Error: '+e.message,'err');}
@@ -2315,7 +2323,15 @@ async function autoCargarAlConectar(){
     const d=await sheetsGet('Base Datos!A2:J400');
     const rows=(d.values||[]).filter(r=>r[0]&&r[1]);
     empleados=rows.map(r=>({id:String(r[0]),nombre:String(r[1]),cedula:r[2]||'',puesto:r[3]||'',cuenta:r[4]||'N/A',horaBase:parseNum(r[5]),fijo:parseNum(r[6]),ccss:r[7]||'',pago:r[8]||'efectivo',nota:r[9]||''}));
+    // Cargar fechas de ingreso desde columna K
+    FECHAS_INGRESO={};
+    rows.forEach(r=>{
+      const id=String(r[0]);
+      const fecha=r[10]?String(r[10]).trim():'';
+      if(fecha&&fecha!=='-'&&fecha!=='N/A')FECHAS_INGRESO[id]=fecha;
+    });
     try{localStorage.setItem('planilla_empleados_cache',JSON.stringify(empleados));}catch(e){}
+    try{localStorage.setItem('planilla_fechas_ingreso',JSON.stringify(FECHAS_INGRESO));}catch(e){}
     renderEmpTable();renderSchedule();
     toast('Empleados cargados: '+empleados.length,'ok');
   }catch(e){toast('Error cargando empleados: '+e.message,'err');}
@@ -2475,20 +2491,8 @@ function exportarAguinaldoExcel(){
 // VACACIONES
 // ══════════════════════════════════════════════════════════════════
 
-// Fechas de ingreso por ID (serial Excel → fecha)
-const FECHAS_INGRESO = {
-  "1":"2025-07-15","2":"2003-09-29","3":"2021-07-04","4":"2024-05-16",
-  "5":"2025-05-17","6":"2023-02-12","7":"2025-10-01","8":"2025-12-22",
-  "9":"2023-06-18","10":"2023-09-03","11":"2025-11-01","12":"2024-04-01",
-  "13":"2024-11-18","14":"2022-08-13","15":"2023-02-28","16":"2025-07-21",
-  "17":"2024-05-22","18":"2023-12-17","19":"2024-03-18","20":"2024-01-12",
-  "21":"2003-02-06","22":"2025-01-17","23":"2024-08-12","24":"2025-11-21",
-  "25":"2024-01-10","26":"2026-02-10","27":"2026-02-15","28":"2024-06-29",
-  "29":"2024-01-08","30":"2023-05-01","31":"2025-11-06","32":"2025-09-01",
-  "33":"2024-11-11","34":"2026-01-19","35":"2025-05-01","36":"2026-02-21",
-  "37":"2025-01-09","38":"2026-03-01","39":"2023-03-12","40":"2021-07-24",
-  "906":"2024-01-07"
-};
+// Fechas de ingreso — se cargan dinámicamente desde Base Datos col K
+let FECHAS_INGRESO = {};
 
 // vacaciones: array de registros guardados en localStorage
 let vacRegistros = [];
@@ -2889,6 +2893,7 @@ const y=new Date().getFullYear();
 for(let i=y;i>=y-4;i--){const o=document.createElement('option');o.value=i;o.textContent=i;anioSel.appendChild(o);}
 document.getElementById('hist-mes').value=new Date().getMonth()+1;
 try{const sc=localStorage.getItem('planilla_cfg');if(sc)cfg=JSON.parse(sc);}catch(e){}
+try{const sf=localStorage.getItem('planilla_fechas_ingreso');if(sf)FECHAS_INGRESO=JSON.parse(sf);}catch(e){}
 try{const sv=localStorage.getItem('planilla_vac_registros');if(sv)vacRegistros=JSON.parse(sv);}catch(e){}
 try{const sa=localStorage.getItem('planilla_vac_ajustes');if(sa)vacAjustes=JSON.parse(sa);}catch(e){}
 try{const sr=localStorage.getItem('planilla_rebajos');if(sr)rebajos=JSON.parse(sr);}catch(e){}
