@@ -108,16 +108,19 @@ tr:hover td{background:var(--bg)}
 .edit-inp:focus{outline:none;border-color:var(--accent)}
 .portada{display:none}
 @media print{
-  .portada{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;page-break-after:always;text-align:center;padding:3cm}
-  .sidebar,.abar,.nav-item,.btn,.week-nav button,.page-header,.notice{display:none!important}
+  /* Suprimir encabezado y pie del navegador */
+  @page{margin:.8cm;size:letter portrait}
+
+  .portada{display:flex;flex-direction:column;align-items:center;justify-content:center;
+    height:100vh;page-break-after:always;text-align:center;padding:3cm}
+  .sidebar,.abar,.nav-item,.btn,.week-nav button,.page-header,.notice,
+  .hist-filter,#inicio-conn-banner{display:none!important}
   .app{display:block}.main{padding:0;overflow:visible}
   body{overflow:visible}
-  @page{
-    margin:.8cm;
-    size:letter portrait;
-  }
   #page-comprobantes{padding:0;max-width:72%;margin:0 auto}
-  .comprobante{height:calc(33.33vh - 1.2rem);border:1px solid #ccc;margin-bottom:.5rem;overflow:hidden;page-break-inside:avoid}
+  .comprobante{height:calc(33.33vh - 1.2rem);border:1px solid #ccc;
+    margin-bottom:.5rem;overflow:hidden;page-break-inside:avoid}
+  .no-print{display:none!important}
 }
 /* Toast notifications */
 #toast-container{position:fixed;bottom:1.5rem;right:1.5rem;z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none}
@@ -146,6 +149,8 @@ tr:hover td{background:var(--bg)}
     <div class="nav-item" onclick="nav('comprobantes',this)"><span>▤</span> Comprobantes</div>
     <div class="nav-item" onclick="nav('historial',this)"><span>◷</span> Historial</div>
     <div class="nav-item" onclick="nav('aguinaldo',this)"><span>✦</span> Aguinaldo</div>
+    <div class="nav-item" onclick="nav('vacaciones',this)"><span>☀</span> Vacaciones</div>
+    <div class="nav-item" onclick="nav('rebajos',this)"><span>↓</span> Rebajos</div>
     <div class="nav-item" onclick="nav('empleados',this)"><span>☰</span> Empleados</div>
     <div class="nav-item" onclick="nav('config',this)"><span>◈</span> Configuración</div>
     <div class="nav-item" onclick="nav('guia',this)"><span>?</span> Guía de uso</div>
@@ -371,6 +376,10 @@ tr:hover td{background:var(--bg)}
   <div class="abar" style="margin-bottom:1rem">
     <button class="btn btn-p" onclick="imprimirComprobantes('todos')">Imprimir todos</button>
     <button class="btn btn-s" onclick="imprimirComprobantes('ccss')">Imprimir solo asegurados CCSS</button>
+    <div style="margin-top:.75rem;padding:8px 12px;background:var(--warn-l);border-radius:6px;font-size:11px;color:var(--warn-d);line-height:1.6">
+      <strong>Antes de imprimir:</strong> en el diálogo de Chrome, desplegá <em>Más opciones</em> y desactivá
+      <em>Encabezados y pies de página</em> para que no aparezca la URL ni la fecha.
+    </div>
   </div>
   <div class="portada" id="portada-comp">
     <img src="https://media-cdn.tripadvisor.com/media/photo-s/04/a0/da/cc/la-fiesta-del-maiz.jpg"
@@ -399,6 +408,193 @@ tr:hover td{background:var(--bg)}
     <div class="tab-wrap">
       <table><thead id="hist-thead"><tr><th>Empleado</th><th style="text-align:right">Sem 1</th><th style="text-align:right">Sem 2</th><th style="text-align:right">Sem 3</th><th style="text-align:right">Sem 4</th><th style="text-align:right">Sem 5</th><th style="text-align:right">Total bruto</th><th style="text-align:right">Total CCSS</th></tr></thead>
       <tbody id="hist-body"><tr><td colspan="8" style="text-align:center;color:var(--text3);padding:2rem">Seleccioná mes y año</td></tr></tbody></table>
+    </div>
+  </div>
+</div>
+
+<!-- VACACIONES -->
+<div id="page-vacaciones" class="page">
+  <div class="page-header">
+    <div class="page-title">Gestión de vacaciones</div>
+    <div class="page-sub">12 días hábiles por cada 50 semanas trabajadas. No llevan rebajo CCSS.</div>
+  </div>
+
+  <div style="display:flex;gap:6px;margin-bottom:1rem;border-bottom:2px solid var(--border);padding-bottom:0">
+    <button id="vac-tab-saldo" class="btn btn-p" style="border-radius:6px 6px 0 0;border-bottom:none;font-size:12px" onclick="vacTab('saldo')">Saldo por empleado</button>
+    <button id="vac-tab-registrar" class="btn btn-s" style="border-radius:6px 6px 0 0;border-bottom:none;font-size:12px" onclick="vacTab('registrar')">Registrar vacaciones</button>
+    <button id="vac-tab-historial" class="btn btn-s" style="border-radius:6px 6px 0 0;border-bottom:none;font-size:12px" onclick="vacTab('historial')">Historial</button>
+  </div>
+
+  <!-- TAB: Saldo -->
+  <div id="vac-tab-saldo-content">
+    <div class="card" style="margin-bottom:1rem">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <input type="text" id="vac-buscar" placeholder="🔍 Buscar empleado..." oninput="renderVacSaldo()"
+          style="font-size:12px;padding:5px 9px;border:1px solid var(--border2);border-radius:var(--rs);background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif;width:200px">
+        <span style="font-size:12px;color:var(--text3)">Los días ganados se calculan automáticamente. Ajustá el saldo inicial si ya tenían vacaciones antes de usar la app.</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="tab-wrap">
+        <table><thead><tr>
+          <th>ID</th><th>Empleado</th><th>F. Ingreso</th>
+          <th style="text-align:right">Ganados</th>
+          <th style="text-align:right">Canceladas<br><span style="font-weight:400;font-size:10px">(pagadas)</span></th>
+          <th style="text-align:right">Disfrutadas<br><span style="font-weight:400;font-size:10px">(descanso)</span></th>
+          <th style="text-align:right">Ajuste inicial</th>
+          <th style="text-align:right;color:var(--accent)">Disponibles</th>
+          <th>Acciones</th>
+        </tr></thead>
+        <tbody id="vac-saldo-tbody"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: Registrar -->
+  <div id="vac-tab-registrar-content" style="display:none">
+    <div class="card">
+      <div class="card-title">Nueva solicitud de vacaciones</div>
+      <div class="form-grid">
+        <div class="fg">
+          <label>Empleado</label>
+          <select id="vac-emp" style="font-size:13px;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--rs);background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif">
+            <option value="">Seleccionar...</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label>Tipo</label>
+          <select id="vac-tipo" style="font-size:13px;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--rs);background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif">
+            <option value="disfrutada">Disfrutadas (descanso)</option>
+            <option value="cancelada">Canceladas (pago en efectivo/transferencia)</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label>Días hábiles</label>
+          <input type="number" id="vac-dias" min="1" max="30" value="1" class="edit-inp" style="width:100%">
+        </div>
+        <div class="fg" id="vac-pago-wrap">
+          <label>Forma de pago</label>
+          <select id="vac-pago" style="font-size:13px;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--rs);background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif">
+            <option value="efectivo">Efectivo</option>
+            <option value="transferencia">Transferencia</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label>Fecha</label>
+          <input type="date" id="vac-fecha" class="edit-inp" style="width:100%">
+        </div>
+        <div class="fg">
+          <label>Nota (opcional)</label>
+          <input type="text" id="vac-nota-reg" placeholder="Ej: semana de descanso dic" class="edit-inp" style="width:100%">
+        </div>
+      </div>
+      <div id="vac-preview" style="margin-top:1rem;padding:12px;background:var(--surface2);border-radius:8px;font-size:13px;display:none"></div>
+      <div style="margin-top:1rem;display:flex;gap:8px">
+        <button class="btn btn-p" onclick="registrarVacaciones()">Guardar vacaciones</button>
+        <button class="btn btn-s" onclick="calcularPreviewVac()">Calcular monto</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: Historial -->
+  <div id="vac-tab-historial-content" style="display:none">
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:8px">
+        <div class="card-title" style="margin-bottom:0">Historial de vacaciones</div>
+        <div style="display:flex;gap:8px">
+          <select id="vac-hist-emp" onchange="renderVacHistorial()" style="font-size:12px;padding:5px 8px;border:1px solid var(--border2);border-radius:var(--rs);background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif">
+            <option value="">Todos los empleados</option>
+          </select>
+          <button class="btn btn-s" style="font-size:11px" onclick="exportarVacExcel()">Exportar Excel</button>
+        </div>
+      </div>
+      <div class="tab-wrap">
+        <table><thead><tr><th>Fecha</th><th>ID</th><th>Empleado</th><th>Tipo</th><th style="text-align:right">Días</th><th style="text-align:right">Monto</th><th>Pago</th><th>Nota</th><th></th></tr></thead>
+        <tbody id="vac-hist-tbody"></tbody></table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- REBAJOS -->
+<div id="page-rebajos" class="page">
+  <div class="page-header">
+    <div class="page-title">Rebajos semanales</div>
+    <div class="page-sub">Préstamos y daños. Se rebajan del neto. No puede superar el salario de la semana.</div>
+  </div>
+
+  <div style="display:flex;gap:6px;margin-bottom:1rem;border-bottom:2px solid var(--border);padding-bottom:0">
+    <button id="reb-tab-activos" class="btn btn-p" style="border-radius:6px 6px 0 0;border-bottom:none;font-size:12px" onclick="rebajoTab('activos')">Rebajos activos</button>
+    <button id="reb-tab-nuevo" class="btn btn-s" style="border-radius:6px 6px 0 0;border-bottom:none;font-size:12px" onclick="rebajoTab('nuevo')">Nuevo rebajo</button>
+    <button id="reb-tab-historial" class="btn btn-s" style="border-radius:6px 6px 0 0;border-bottom:none;font-size:12px" onclick="rebajoTab('historial')">Historial</button>
+  </div>
+
+  <!-- TAB: Activos -->
+  <div id="reb-tab-activos-content">
+    <div class="card">
+      <div class="tab-wrap">
+        <table><thead><tr>
+          <th>ID</th><th>Empleado</th><th>Concepto</th>
+          <th style="text-align:right">Monto total</th>
+          <th style="text-align:right">Cuota semanal</th>
+          <th style="text-align:right">Pagado</th>
+          <th style="text-align:right;color:var(--accent)">Pendiente</th>
+          <th>Estado</th><th>Acciones</th>
+        </tr></thead>
+        <tbody id="reb-activos-tbody"><tr><td colspan="9" style="text-align:center;color:var(--text3);padding:2rem">Sin rebajos activos</td></tr></tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <!-- TAB: Nuevo -->
+  <div id="reb-tab-nuevo-content" style="display:none">
+    <div class="card">
+      <div class="card-title">Registrar nuevo rebajo</div>
+      <div class="form-grid">
+        <div class="fg">
+          <label>Empleado</label>
+          <select id="reb-emp" style="font-size:13px;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--rs);background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif">
+            <option value="">Seleccionar...</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label>Concepto</label>
+          <input type="text" id="reb-concepto" placeholder="Ej: Préstamo personal, Daño vajilla" class="edit-inp" style="width:100%">
+        </div>
+        <div class="fg">
+          <label>Monto total (₡)</label>
+          <input type="number" id="reb-total" min="0" value="0" class="edit-inp" style="width:100%">
+        </div>
+        <div class="fg">
+          <label>Cuota semanal (₡)</label>
+          <input type="number" id="reb-cuota" min="0" value="0" class="edit-inp" style="width:100%">
+        </div>
+        <div class="fg">
+          <label>Fecha inicio</label>
+          <input type="date" id="reb-fecha" class="edit-inp" style="width:100%">
+        </div>
+        <div class="fg">
+          <label>Nota (opcional)</label>
+          <input type="text" id="reb-nota-reg" placeholder="Referencia interna" class="edit-inp" style="width:100%">
+        </div>
+      </div>
+      <div style="margin-top:1rem">
+        <button class="btn btn-p" onclick="guardarRebajo()">Guardar rebajo</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: Historial -->
+  <div id="reb-tab-historial-content" style="display:none">
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+        <div class="card-title" style="margin-bottom:0">Historial de rebajos aplicados</div>
+        <button class="btn btn-s" style="font-size:11px" onclick="exportarRebajosExcel()">Exportar Excel</button>
+      </div>
+      <div class="tab-wrap">
+        <table><thead><tr><th>Semana</th><th>ID</th><th>Empleado</th><th>Concepto</th><th style="text-align:right">Cuota aplicada</th><th style="text-align:right">Pendiente tras rebajo</th></tr></thead>
+        <tbody id="reb-hist-tbody"><tr><td colspan="6" style="text-align:center;color:var(--text3);padding:2rem">Sin historial</td></tr></tbody>
+      </table></div>
     </div>
   </div>
 </div>
@@ -774,6 +970,8 @@ function nav(id,el){
   el.classList.add('active');
   if(id==='aguinaldo')agRenderLista();
   if(id==='inicio')actualizarInicio();
+  if(id==='vacaciones'){poblarVacEmpSelect();renderVacSaldo();}
+  if(id==='rebajos')renderRebajosActivos();
 }
 
 function updateHeader(){
@@ -1083,6 +1281,7 @@ function calcularPago(){
   document.getElementById('m-ccss').textContent=fmtMon(totCCSS);
   document.getElementById('m-neto-ef').textContent=fmtMon(totEf);
   document.getElementById('m-neto-tr').textContent=fmtMon(totTr);
+  aplicarRebajosAlCalculo();
   renderCalculo();renderTransferencias();renderBilletes();renderComprobantes();
   toast('Planilla calculada correctamente','ok');
 }
@@ -1740,55 +1939,20 @@ function imprimirComprobantes(modo){
   });
   if(!filtrados.length){toast('Sin comprobantes para imprimir','warn');return;}
 
-  // Capturar CSS de la página
-  const estilos=[...document.styleSheets].map(ss=>{
-    try{return[...ss.cssRules].map(r=>r.cssText).join('\n');}catch(e){return'';}
-  }).join('\n');
+  // Ocultar todo excepto los comprobantes seleccionados y luego imprimir
+  // Esto evita ventanas emergentes y problemas de estilos
+  const todos=[...document.querySelectorAll('#comprobantes-list .comprobante')];
+  const ocultar=todos.filter(c=>!filtrados.includes(c));
 
-  const portadaEl=document.getElementById('portada-comp');
-  const portadaHTML=portadaEl?portadaEl.innerHTML:'';
+  // Agregar clase print-active al body para el CSS de impresión
+  document.body.classList.add('printing-comprobantes');
+  ocultar.forEach(c=>c.classList.add('no-print'));
 
-  const html=`<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title></title>
-<style>
-@page{margin:.8cm;size:letter portrait}
-*{box-sizing:border-box}
-body{margin:0;padding:0;font-family:'DM Sans',Arial,sans-serif;background:#fff;color:#1a1917;
-  --bg:#fff;--surface:#f9f8f6;--surface2:#f2f0ec;--border:#e5e3de;--border2:#ccc;
-  --text:#1a1917;--text2:#4a4845;--text3:#8c8a87;--accent:#2d5a3d;--danger:#c0392b;
-  --warn:#b7791f;--warn-l:#fef3c7;--warn-d:#92400e;--r:10px;--rs:6px}
-${estilos}
-.portada{display:flex;flex-direction:column;align-items:center;justify-content:center;
-  min-height:100vh;page-break-after:always;text-align:center;padding:3cm;position:relative}
-#comprobantes-wrap{max-width:72%;margin:0 auto}
-.comprobante{height:calc(33.33vh - 1.2rem);border:1px solid #ccc;margin-bottom:.5rem;
-  overflow:hidden;page-break-inside:avoid}
-</style>
-</head>
-<body>
-<div class="portada">${portadaHTML}</div>
-<div id="comprobantes-wrap">
-${filtrados.map(c=>c.outerHTML).join('\n')}
-</div>
-<script>
-  window.addEventListener('load',function(){
-    setTimeout(function(){window.print();window.close();},500);
-  });
-<\/script>
-</body>
-</html>`;
+  window.print();
 
-  const win=window.open('','_blank','width=900,height=700');
-  if(!win){
-    toast('El navegador bloqueó la ventana emergente — permitila e intentá de nuevo','warn',5000);
-    return;
-  }
-  win.document.open();
-  win.document.write(html);
-  win.document.close();
+  // Restaurar
+  document.body.classList.remove('printing-comprobantes');
+  ocultar.forEach(c=>c.classList.remove('no-print'));
 }
 
 function exportarTransferenciasExcel(){
@@ -2306,17 +2470,439 @@ function exportarAguinaldoExcel(){
 }
 
 
+
+// ══════════════════════════════════════════════════════════════════
+// VACACIONES
+// ══════════════════════════════════════════════════════════════════
+
+// Fechas de ingreso por ID (serial Excel → fecha)
+const FECHAS_INGRESO = {
+  "1":"2025-07-15","2":"2003-09-29","3":"2021-07-04","4":"2024-05-16",
+  "5":"2025-05-17","6":"2023-02-12","7":"2025-10-01","8":"2025-12-22",
+  "9":"2023-06-18","10":"2023-09-03","11":"2025-11-01","12":"2024-04-01",
+  "13":"2024-11-18","14":"2022-08-13","15":"2023-02-28","16":"2025-07-21",
+  "17":"2024-05-22","18":"2023-12-17","19":"2024-03-18","20":"2024-01-12",
+  "21":"2003-02-06","22":"2025-01-17","23":"2024-08-12","24":"2025-11-21",
+  "25":"2024-01-10","26":"2026-02-10","27":"2026-02-15","28":"2024-06-29",
+  "29":"2024-01-08","30":"2023-05-01","31":"2025-11-06","32":"2025-09-01",
+  "33":"2024-11-11","34":"2026-01-19","35":"2025-05-01","36":"2026-02-21",
+  "37":"2025-01-09","38":"2026-03-01","39":"2023-03-12","40":"2021-07-24",
+  "906":"2024-01-07"
+};
+
+// vacaciones: array de registros guardados en localStorage
+let vacRegistros = [];
+// ajustes iniciales manuales: {empId: {canceladas:N, disfrutadas:N}}
+let vacAjustes = {};
+
+function vacDiasGanados(empId) {
+  const fechaStr = FECHAS_INGRESO[empId];
+  if (!fechaStr) return 0;
+  const ingreso = new Date(fechaStr);
+  const hoy = new Date();
+  const dias = (hoy - ingreso) / (1000 * 60 * 60 * 24);
+  const semanas = dias / 7;
+  return Math.floor(semanas / 50) * 12;
+}
+
+function vacSaldo(empId) {
+  const ganados = vacDiasGanados(empId);
+  const aj = vacAjustes[empId] || { canceladas: 0, disfrutadas: 0 };
+  const usadosCanceladas = vacRegistros.filter(r => r.empId === empId && r.tipo === 'cancelada').reduce((s, r) => s + r.dias, 0);
+  const usadosDisfrutadas = vacRegistros.filter(r => r.empId === empId && r.tipo === 'disfrutada').reduce((s, r) => s + r.dias, 0);
+  const totalCanceladas = aj.canceladas + usadosCanceladas;
+  const totalDisfrutadas = aj.disfrutadas + usadosDisfrutadas;
+  const disponibles = ganados - totalCanceladas - totalDisfrutadas;
+  return { ganados, canceladas: totalCanceladas, disfrutadas: totalDisfrutadas, disponibles };
+}
+
+function vacTab(tab) {
+  ['saldo','registrar','historial'].forEach(t => {
+    document.getElementById('vac-tab-'+t+'-content').style.display = t === tab ? '' : 'none';
+    document.getElementById('vac-tab-'+t).className = t === tab ? 'btn btn-p' : 'btn btn-s';
+    document.getElementById('vac-tab-'+t).style.cssText = 'border-radius:6px 6px 0 0;border-bottom:none;font-size:12px';
+  });
+  if (tab === 'saldo') renderVacSaldo();
+  if (tab === 'historial') { renderVacHistorial(); poblarVacHistEmp(); }
+  if (tab === 'registrar') { poblarVacEmpSelect(); actualizarPreviewVac(); }
+}
+
+function renderVacSaldo() {
+  const buscar = (document.getElementById('vac-buscar')?.value || '').toLowerCase();
+  const tbody = document.getElementById('vac-saldo-tbody');
+  const empsFiltrados = empleados.filter(e => e.id !== '999' &&
+    (!buscar || e.nombre.toLowerCase().includes(buscar) || e.id.includes(buscar)));
+
+  tbody.innerHTML = empsFiltrados.map(e => {
+    const s = vacSaldo(e.id);
+    const aj = vacAjustes[e.id] || { canceladas: 0, disfrutadas: 0 };
+    const fecha = FECHAS_INGRESO[e.id] || '—';
+    const dispColor = s.disponibles < 0 ? 'color:var(--danger)' : s.disponibles === 0 ? 'color:var(--text3)' : 'color:var(--accent)';
+    return `<tr>
+      <td style="font-family:'DM Mono',monospace;color:var(--text3);font-size:11px">${e.id}</td>
+      <td style="font-weight:500;font-size:12px">${e.nombre}</td>
+      <td style="font-size:11px;color:var(--text3)">${fecha}</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace">${s.ganados}</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace">${s.canceladas}</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace">${s.disfrutadas}</td>
+      <td style="text-align:right">
+        <div style="display:flex;gap:4px;justify-content:flex-end;align-items:center">
+          <input type="number" value="${aj.canceladas}" min="0" style="width:44px;font-size:11px;padding:2px 4px;border:1px solid var(--border2);border-radius:4px;text-align:center"
+            onchange="actualizarAjuste('${e.id}','canceladas',this.value)" title="Canceladas previas">
+          <span style="font-size:10px;color:var(--text3)">C</span>
+          <input type="number" value="${aj.disfrutadas}" min="0" style="width:44px;font-size:11px;padding:2px 4px;border:1px solid var(--border2);border-radius:4px;text-align:center"
+            onchange="actualizarAjuste('${e.id}','disfrutadas',this.value)" title="Disfrutadas previas">
+          <span style="font-size:10px;color:var(--text3)">D</span>
+        </div>
+      </td>
+      <td style="text-align:right;font-weight:700;font-family:'DM Mono',monospace;${dispColor}">${s.disponibles}</td>
+      <td>
+        <button class="btn btn-s" style="font-size:10px;padding:3px 7px"
+          onclick="iniciarRegistroVac('${e.id}')">+ Registrar</button>
+      </td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:2rem">Sin empleados</td></tr>';
+}
+
+function actualizarAjuste(empId, tipo, val) {
+  if (!vacAjustes[empId]) vacAjustes[empId] = { canceladas: 0, disfrutadas: 0 };
+  vacAjustes[empId][tipo] = parseInt(val) || 0;
+  try { localStorage.setItem('planilla_vac_ajustes', JSON.stringify(vacAjustes)); } catch(e) {}
+  renderVacSaldo();
+}
+
+function iniciarRegistroVac(empId) {
+  vacTab('registrar');
+  setTimeout(() => {
+    const sel = document.getElementById('vac-emp');
+    if (sel) sel.value = empId;
+    actualizarPreviewVac();
+  }, 50);
+}
+
+function poblarVacEmpSelect() {
+  const sel = document.getElementById('vac-emp');
+  if (!sel) return;
+  const actual = sel.value;
+  sel.innerHTML = '<option value="">Seleccionar...</option>' +
+    empleados.filter(e => e.id !== '999').map(e =>
+      `<option value="${e.id}"${e.id === actual ? ' selected' : ''}>${e.id} — ${e.nombre}</option>`
+    ).join('');
+}
+
+function poblarVacHistEmp() {
+  const sel = document.getElementById('vac-hist-emp');
+  if (!sel) return;
+  const actual = sel.value;
+  sel.innerHTML = '<option value="">Todos los empleados</option>' +
+    empleados.filter(e => e.id !== '999').map(e =>
+      `<option value="${e.id}"${e.id === actual ? ' selected' : ''}>${e.nombre}</option>`
+    ).join('');
+}
+
+function actualizarPreviewVac() {
+  const empId = document.getElementById('vac-emp')?.value;
+  const dias = parseInt(document.getElementById('vac-dias')?.value) || 0;
+  const tipo = document.getElementById('vac-tipo')?.value;
+  const pagoWrap = document.getElementById('vac-pago-wrap');
+  const preview = document.getElementById('vac-preview');
+  if (pagoWrap) pagoWrap.style.display = tipo === 'cancelada' ? '' : 'none';
+  if (!empId || !dias || !preview) { if (preview) preview.style.display = 'none'; return; }
+  const emp = empleados.find(e => e.id === empId);
+  if (!emp) return;
+  const monto = (parseFloat(emp.horaBase) || 0) * 8 * dias;
+  const s = vacSaldo(empId);
+  const pago = document.getElementById('vac-pago')?.value || 'efectivo';
+  preview.style.display = '';
+  preview.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem">
+      <div><div style="font-size:11px;color:var(--text3)">Empleado</div><div style="font-weight:600">${emp.nombre}</div></div>
+      <div><div style="font-size:11px;color:var(--text3)">Tipo</div><div style="font-weight:600">${tipo === 'cancelada' ? '💰 Canceladas (pago)' : '🌴 Disfrutadas (descanso)'}</div></div>
+      <div><div style="font-size:11px;color:var(--text3)">Días</div><div style="font-weight:600">${dias} días hábiles</div></div>
+      <div><div style="font-size:11px;color:var(--text3)">Hora base</div><div style="font-family:'DM Mono',monospace">${fmtMon(emp.horaBase)}</div></div>
+      <div><div style="font-size:11px;color:var(--text3)">Monto (sin CCSS)</div><div style="font-weight:700;color:var(--accent);font-family:'DM Mono',monospace">${fmtMon(monto)}</div></div>
+      ${tipo === 'cancelada' ? `<div><div style="font-size:11px;color:var(--text3)">Forma de pago</div><div style="font-weight:600">${pago === 'transferencia' ? 'Transferencia' : 'Efectivo'}</div></div>` : '<div></div>'}
+      <div style="grid-column:1/-1;border-top:1px solid var(--border);padding-top:.5rem;font-size:12px;color:${s.disponibles >= dias ? 'var(--accent)' : 'var(--danger)'}">
+        Saldo disponible: <strong>${s.disponibles} días</strong> → tras este registro: <strong>${s.disponibles - dias} días</strong>
+        ${s.disponibles < dias ? ' ⚠ Saldo insuficiente' : ''}
+      </div>
+    </div>`;
+}
+
+function calcularPreviewVac() { actualizarPreviewVac(); }
+
+function registrarVacaciones() {
+  const empId = document.getElementById('vac-emp')?.value;
+  const dias = parseInt(document.getElementById('vac-dias')?.value) || 0;
+  const tipo = document.getElementById('vac-tipo')?.value;
+  const pago = document.getElementById('vac-pago')?.value || 'efectivo';
+  const fecha = document.getElementById('vac-fecha')?.value || new Date().toISOString().split('T')[0];
+  const nota = document.getElementById('vac-nota-reg')?.value || '';
+
+  if (!empId) { toast('Seleccioná un empleado', 'warn'); return; }
+  if (!dias || dias < 1) { toast('Ingresá la cantidad de días', 'warn'); return; }
+
+  const emp = empleados.find(e => e.id === empId);
+  if (!emp) return;
+  const monto = (parseFloat(emp.horaBase) || 0) * 8 * dias;
+  const s = vacSaldo(empId);
+
+  if (s.disponibles < dias) {
+    if (!confirm(`⚠ El empleado solo tiene ${s.disponibles} días disponibles. ¿Registrar de todas formas?`)) return;
+  }
+
+  const registro = {
+    id: Date.now().toString(),
+    empId, nombre: emp.nombre, tipo, dias, monto,
+    pago: tipo === 'cancelada' ? pago : 'disfrutada',
+    fecha, nota
+  };
+  vacRegistros.unshift(registro);
+  try { localStorage.setItem('planilla_vac_registros', JSON.stringify(vacRegistros)); } catch(e) {}
+
+  // Guardar en Sheets
+  if (accessToken) guardarVacEnSheets(registro);
+
+  toast(`Vacaciones registradas — ${fmtMon(monto)}`, 'ok');
+  renderVacSaldo();
+
+  // Limpiar form
+  document.getElementById('vac-dias').value = 1;
+  document.getElementById('vac-nota-reg').value = '';
+  document.getElementById('vac-preview').style.display = 'none';
+}
+
+async function guardarVacEnSheets(r) {
+  try {
+    await sheetsAppend('Vacaciones!A1', [[r.fecha, r.empId, r.nombre, r.tipo, r.dias, Math.round(r.monto), r.pago, r.nota, r.id]]);
+  } catch(e) { console.warn('Error guardando vacaciones en Sheets:', e.message); }
+}
+
+function renderVacHistorial() {
+  const filtroEmp = document.getElementById('vac-hist-emp')?.value || '';
+  const registros = filtroEmp ? vacRegistros.filter(r => r.empId === filtroEmp) : vacRegistros;
+  const tbody = document.getElementById('vac-hist-tbody');
+  tbody.innerHTML = registros.length ? registros.map(r => `<tr>
+    <td style="font-size:11px;color:var(--text3)">${r.fecha}</td>
+    <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3)">${r.empId}</td>
+    <td style="font-weight:500;font-size:12px">${r.nombre}</td>
+    <td>${r.tipo === 'cancelada' ? '💰 Cancelada' : '🌴 Disfrutada'}</td>
+    <td style="text-align:right;font-family:'DM Mono',monospace">${r.dias}</td>
+    <td style="text-align:right;font-family:'DM Mono',monospace;color:var(--accent)">${fmtMon(r.monto)}</td>
+    <td>${r.pago === 'transferencia' ? 'Transferencia' : r.pago === 'disfrutada' ? '—' : 'Efectivo'}</td>
+    <td style="font-size:11px;color:var(--text3)">${r.nota || '—'}</td>
+    <td><button class="btn btn-d" style="font-size:10px;padding:2px 7px" onclick="eliminarVac('${r.id}')">✕</button></td>
+  </tr>`).join('')
+  : '<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:2rem">Sin registros</td></tr>';
+}
+
+function eliminarVac(id) {
+  if (!confirm('¿Eliminar este registro de vacaciones?')) return;
+  vacRegistros = vacRegistros.filter(r => r.id !== id);
+  try { localStorage.setItem('planilla_vac_registros', JSON.stringify(vacRegistros)); } catch(e) {}
+  renderVacHistorial();
+  renderVacSaldo();
+  toast('Registro eliminado', 'ok');
+}
+
+function exportarVacExcel() {
+  if (!vacRegistros.length) { toast('Sin registros para exportar', 'warn'); return; }
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([
+    ['Fecha', 'ID', 'Empleado', 'Tipo', 'Días', 'Monto', 'Forma de pago', 'Nota'],
+    ...vacRegistros.map(r => [r.fecha, r.empId, r.nombre, r.tipo, r.dias, Math.round(r.monto), r.pago, r.nota])
+  ]);
+  ws['!cols'] = [{wch:12},{wch:6},{wch:30},{wch:14},{wch:8},{wch:14},{wch:16},{wch:25}];
+  XLSX.utils.book_append_sheet(wb, ws, 'Vacaciones');
+  XLSX.writeFile(wb, 'Vacaciones_Profecha.xlsx');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// REBAJOS
+// ══════════════════════════════════════════════════════════════════
+let rebajos = []; // {id, empId, nombre, concepto, total, cuota, pagado, fecha, nota, activo}
+let rebajosHistorial = []; // {semana, empId, nombre, concepto, cuotaAplicada, pendienteTras}
+
+function rebajoTab(tab) {
+  ['activos','nuevo','historial'].forEach(t => {
+    document.getElementById('reb-tab-'+t+'-content').style.display = t === tab ? '' : 'none';
+    document.getElementById('reb-tab-'+t).className = t === tab ? 'btn btn-p' : 'btn btn-s';
+    document.getElementById('reb-tab-'+t).style.cssText = 'border-radius:6px 6px 0 0;border-bottom:none;font-size:12px';
+  });
+  if (tab === 'activos') renderRebajosActivos();
+  if (tab === 'nuevo') poblarRebEmpSelect();
+  if (tab === 'historial') renderRebajosHistorial();
+}
+
+function renderRebajosActivos() {
+  const tbody = document.getElementById('reb-activos-tbody');
+  const activos = rebajos.filter(r => r.activo);
+  tbody.innerHTML = activos.length ? activos.map(r => {
+    const pendiente = r.total - r.pagado;
+    return `<tr>
+      <td style="font-family:'DM Mono',monospace;color:var(--text3);font-size:11px">${r.empId}</td>
+      <td style="font-weight:500;font-size:12px">${r.nombre}</td>
+      <td style="font-size:12px">${r.concepto}</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace">${fmtMon(r.total)}</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace">${fmtMon(r.cuota)}</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace;color:var(--accent)">${fmtMon(r.pagado)}</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace;font-weight:700;color:${pendiente > 0 ? 'var(--danger)' : 'var(--accent)'}">${fmtMon(pendiente)}</td>
+      <td><span style="font-size:11px;padding:2px 8px;border-radius:4px;background:${pendiente > 0 ? 'var(--warn-l)' : '#d1fae5'};color:${pendiente > 0 ? 'var(--warn-d)' : '#065f46'}">${pendiente > 0 ? 'Activo' : '✓ Saldado'}</span></td>
+      <td style="display:flex;gap:4px">
+        <button class="btn btn-s" style="font-size:10px;padding:3px 7px" onclick="aplicarCuotaManual('${r.id}')">Aplicar cuota</button>
+        <button class="btn btn-d" style="font-size:10px;padding:3px 7px" onclick="eliminarRebajo('${r.id}')">✕</button>
+      </td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:2rem">Sin rebajos activos</td></tr>';
+}
+
+function poblarRebEmpSelect() {
+  const sel = document.getElementById('reb-emp');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Seleccionar...</option>' +
+    empleados.filter(e => e.id !== '999').map(e =>
+      `<option value="${e.id}">${e.id} — ${e.nombre}</option>`
+    ).join('');
+}
+
+function guardarRebajo() {
+  const empId = document.getElementById('reb-emp')?.value;
+  const concepto = document.getElementById('reb-concepto')?.value.trim();
+  const total = parseFloat(document.getElementById('reb-total')?.value) || 0;
+  const cuota = parseFloat(document.getElementById('reb-cuota')?.value) || 0;
+  const fecha = document.getElementById('reb-fecha')?.value || new Date().toISOString().split('T')[0];
+  const nota = document.getElementById('reb-nota-reg')?.value || '';
+
+  if (!empId) { toast('Seleccioná un empleado', 'warn'); return; }
+  if (!concepto) { toast('Ingresá el concepto', 'warn'); return; }
+  if (total <= 0) { toast('El monto total debe ser mayor a 0', 'warn'); return; }
+  if (cuota <= 0) { toast('La cuota debe ser mayor a 0', 'warn'); return; }
+  if (cuota > total) { toast('La cuota no puede superar el monto total', 'warn'); return; }
+
+  const emp = empleados.find(e => e.id === empId);
+  const rebajo = {
+    id: Date.now().toString(),
+    empId, nombre: emp ? emp.nombre : empId,
+    concepto, total, cuota, pagado: 0, fecha, nota, activo: true
+  };
+  rebajos.push(rebajo);
+  try { localStorage.setItem('planilla_rebajos', JSON.stringify(rebajos)); } catch(e) {}
+
+  if (accessToken) guardarRebajoEnSheets(rebajo);
+
+  toast(`Rebajo registrado — cuota semanal ${fmtMon(cuota)}`, 'ok');
+  rebajoTab('activos');
+
+  // Limpiar form
+  ['reb-concepto','reb-nota-reg'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  ['reb-total','reb-cuota'].forEach(id => { const el = document.getElementById(id); if(el) el.value = 0; });
+}
+
+async function guardarRebajoEnSheets(r) {
+  try {
+    await sheetsAppend('Rebajos!A1', [[r.fecha, r.empId, r.nombre, r.concepto, r.total, r.cuota, r.nota, r.id]]);
+  } catch(e) { console.warn('Error guardando rebajo en Sheets:', e.message); }
+}
+
+function aplicarCuotaManual(id) {
+  const r = rebajos.find(x => x.id === id);
+  if (!r) return;
+  const pendiente = r.total - r.pagado;
+  const aAplicar = Math.min(r.cuota, pendiente);
+  r.pagado += aAplicar;
+  if (r.pagado >= r.total) r.activo = false;
+  try { localStorage.setItem('planilla_rebajos', JSON.stringify(rebajos)); } catch(e) {}
+  renderRebajosActivos();
+  toast(`Cuota aplicada: ${fmtMon(aAplicar)} — pendiente: ${fmtMon(r.total - r.pagado)}`, 'ok');
+}
+
+function eliminarRebajo(id) {
+  if (!confirm('¿Eliminar este rebajo?')) return;
+  rebajos = rebajos.filter(r => r.id !== id);
+  try { localStorage.setItem('planilla_rebajos', JSON.stringify(rebajos)); } catch(e) {}
+  renderRebajosActivos();
+  toast('Rebajo eliminado', 'ok');
+}
+
+// Aplicar rebajos automáticamente al calcular planilla
+function aplicarRebajosAlCalculo() {
+  const semana = weekLabel();
+  rebajos.filter(r => r.activo).forEach(r => {
+    const resultado = resultados.find(res => res.empId === r.empId);
+    if (!resultado || resultado.sinPerfil) return;
+
+    const neto = resultado.neto;
+    const pendiente = r.total - r.pagado;
+    let cuotaAplicar = Math.min(r.cuota, pendiente, neto); // por ley no puede superar el salario
+
+    if (cuotaAplicar <= 0) return;
+
+    resultado.neto -= cuotaAplicar;
+    resultado.netoEf = resultado.emp?.pago === 'transferencia' ? 0 : resultado.neto;
+    resultado.netoTr = resultado.emp?.pago === 'transferencia' ? resultado.neto : 0;
+    resultado.rebajoRebajo = (resultado.rebajoRebajo || 0) + cuotaAplicar;
+
+    r.pagado += cuotaAplicar;
+    if (r.pagado >= r.total) r.activo = false;
+
+    rebajosHistorial.unshift({
+      id: Date.now().toString() + r.id,
+      semana, empId: r.empId, nombre: r.nombre,
+      concepto: r.concepto, cuotaAplicada: cuotaAplicar,
+      pendienteTras: r.total - r.pagado
+    });
+  });
+  try {
+    localStorage.setItem('planilla_rebajos', JSON.stringify(rebajos));
+    localStorage.setItem('planilla_rebajos_hist', JSON.stringify(rebajosHistorial));
+  } catch(e) {}
+}
+
+function renderRebajosHistorial() {
+  const tbody = document.getElementById('reb-hist-tbody');
+  tbody.innerHTML = rebajosHistorial.length ? rebajosHistorial.map(r => `<tr>
+    <td style="font-size:11px;color:var(--text3)">${r.semana}</td>
+    <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3)">${r.empId}</td>
+    <td style="font-weight:500;font-size:12px">${r.nombre}</td>
+    <td style="font-size:12px">${r.concepto}</td>
+    <td style="text-align:right;font-family:'DM Mono',monospace;color:var(--danger)">${fmtMon(r.cuotaAplicada)}</td>
+    <td style="text-align:right;font-family:'DM Mono',monospace">${fmtMon(r.pendienteTras)}</td>
+  </tr>`).join('')
+  : '<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:2rem">Sin historial</td></tr>';
+}
+
+function exportarRebajosExcel() {
+  if (!rebajosHistorial.length) { toast('Sin historial para exportar', 'warn'); return; }
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([
+    ['Semana','ID','Empleado','Concepto','Cuota aplicada','Pendiente tras rebajo'],
+    ...rebajosHistorial.map(r => [r.semana, r.empId, r.nombre, r.concepto, Math.round(r.cuotaAplicada), Math.round(r.pendienteTras)])
+  ]);
+  ws['!cols'] = [{wch:22},{wch:6},{wch:30},{wch:25},{wch:16},{wch:20}];
+  XLSX.utils.book_append_sheet(wb, ws, 'Historial Rebajos');
+  XLSX.writeFile(wb, 'Rebajos_Profecha.xlsx');
+}
+
 // Init
 const anioSel=document.getElementById('hist-anio');
 const y=new Date().getFullYear();
 for(let i=y;i>=y-4;i--){const o=document.createElement('option');o.value=i;o.textContent=i;anioSel.appendChild(o);}
 document.getElementById('hist-mes').value=new Date().getMonth()+1;
 try{const sc=localStorage.getItem('planilla_cfg');if(sc)cfg=JSON.parse(sc);}catch(e){}
+try{const sv=localStorage.getItem('planilla_vac_registros');if(sv)vacRegistros=JSON.parse(sv);}catch(e){}
+try{const sa=localStorage.getItem('planilla_vac_ajustes');if(sa)vacAjustes=JSON.parse(sa);}catch(e){}
+try{const sr=localStorage.getItem('planilla_rebajos');if(sr)rebajos=JSON.parse(sr);}catch(e){}
+try{const srh=localStorage.getItem('planilla_rebajos_hist');if(srh)rebajosHistorial=JSON.parse(srh);}catch(e){}
 try{const sm=localStorage.getItem('planilla_movimientos');if(sm){movimientos=JSON.parse(sm);renderMovimientos();}}catch(e){}
 try{const se=localStorage.getItem('planilla_empleados_cache');if(se&&!empleados.length){empleados=JSON.parse(se);renderEmpTable();renderSchedule();}}catch(e){}
 document.getElementById(cfg.extrasAcumulativas?'extras-acum':'extras-dia').checked=true;
 if(document.getElementById('cfg-extradob'))document.getElementById('cfg-extradob').value=cfg.extraDoble||3.5;
 updateHeader();renderSchedule();renderEmpTable();actualizarInicio();
+// Set default dates
+(()=>{
+  const hoy = new Date().toISOString().split('T')[0];
+  ['vac-fecha','reb-fecha'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=hoy;});
+})();
 // Poblar selector año historial
 (()=>{
   const sel=document.getElementById('hist-anio');if(!sel)return;
