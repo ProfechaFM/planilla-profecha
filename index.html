@@ -2320,7 +2320,7 @@ function renderInicioMovimientos(){
 // ── Auto-carga al conectar ───────────────────────────────────────────
 async function autoCargarAlConectar(){
   try{
-    const d=await sheetsGet('Base Datos!A2:J400');
+    const d=await sheetsGet('Base Datos!A2:K400');
     const rows=(d.values||[]).filter(r=>r[0]&&r[1]);
     empleados=rows.map(r=>({id:String(r[0]),nombre:String(r[1]),cedula:r[2]||'',puesto:r[3]||'',cuenta:r[4]||'N/A',horaBase:parseNum(r[5]),fijo:parseNum(r[6]),ccss:r[7]||'',pago:r[8]||'efectivo',nota:r[9]||''}));
     // Cargar fechas de ingreso desde columna K
