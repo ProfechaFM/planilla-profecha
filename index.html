@@ -491,8 +491,11 @@ tr:hover td{background:var(--bg)}
           <input type="date" id="vac-fecha-fin" class="edit-inp" oninput="actualizarPreviewVac()" style="width:100%">
         </div>
         <div class="fg">
-          <label>Días hábiles</label>
-          <input type="number" id="vac-dias" min="1" max="30" value="1" class="edit-inp" oninput="actualizarPreviewVac()" style="width:100%">
+          <label>Días hábiles (calculado automáticamente)</label>
+          <div id="vac-dias-display" style="padding:8px 12px;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--rs);font-family:'DM Mono',monospace;font-size:14px;font-weight:600;color:var(--accent)">
+            — días
+          </div>
+          <input type="hidden" id="vac-dias" value="0">
         </div>
         <div class="fg">
           <label>Nota (opcional)</label>
@@ -2623,7 +2626,10 @@ function poblarVacHistEmp() {
 
 function actualizarPreviewVac() {
   const empId = document.getElementById('vac-emp')?.value;
-  const dias = parseInt(document.getElementById('vac-dias')?.value) || 0;
+  const diasInput = document.getElementById('vac-dias');
+  const fechaIniRaw = document.getElementById('vac-fecha-ini')?.value || '';
+  const fechaFinRaw = document.getElementById('vac-fecha-fin')?.value || '';
+  const dias = calcularDiasHabiles(fechaIniRaw, fechaFinRaw);
   const tipo = document.getElementById('vac-tipo')?.value;
   const pagoWrap = document.getElementById('vac-pago-wrap');
   const preview = document.getElementById('vac-preview');
@@ -2958,28 +2964,53 @@ function poblarVacPeriodos(empId) {
   ).join('');
 }
 
+// Auto-calculate business days from date range
+function calcularDiasHabiles(fechaIniStr, fechaFinStr) {
+  if (!fechaIniStr || !fechaFinStr) return 0;
+  const ini = new Date(fechaIniStr + 'T12:00:00');
+  const fin = new Date(fechaFinStr + 'T12:00:00');
+  if (ini > fin) return 0;
+  let count = 0;
+  const cur = new Date(ini);
+  while (cur <= fin) {
+    if (cur.getDay() >= 1 && cur.getDay() <= 5) count++; // Mon-Fri
+    cur.setDate(cur.getDate() + 1);
+  }
+  return count;
+}
+
 // Override actualizarPreviewVac with improved version
 function actualizarPreviewVac() {
   const empId = document.getElementById('vac-emp')?.value;
   const tipo = document.getElementById('vac-tipo')?.value;
-  const dias = parseInt(document.getElementById('vac-dias')?.value) || 0;
   const pagoWrap = document.getElementById('vac-pago-wrap');
   const preview = document.getElementById('vac-preview');
   const periodoSel = document.getElementById('vac-periodo');
+  const diasDisplay = document.getElementById('vac-dias-display');
+  const diasInput = document.getElementById('vac-dias');
+  const fechaIni = document.getElementById('vac-fecha-ini')?.value || '';
+  const fechaFin = document.getElementById('vac-fecha-fin')?.value || '';
 
   // Show/hide pago based on tipo
   if (pagoWrap) pagoWrap.style.display = (tipo === 'disfrutada') ? 'none' : '';
 
   // Populate períodos when employee changes
   if (empId && periodoSel) {
-    const periodos = vacPeriodosDisponibles(empId);
     if (periodoSel.children.length <= 1 || periodoSel.dataset.empId !== empId) {
       poblarVacPeriodos(empId);
       periodoSel.dataset.empId = empId;
     }
   }
 
-  if (!empId || !dias || !preview) { if (preview) preview.style.display = 'none'; return; }
+  // Calculate business days automatically
+  const dias = calcularDiasHabiles(fechaIni, fechaFin);
+  if (diasInput) diasInput.value = dias;
+  if (diasDisplay) {
+    diasDisplay.textContent = dias > 0 ? `${dias} día${dias !== 1 ? 's' : ''} hábil${dias !== 1 ? 'es' : ''}` : '— días';
+    diasDisplay.style.color = dias > 0 ? 'var(--accent)' : 'var(--text3)';
+  }
+
+  if (!empId || dias === 0 || !preview) { if (preview) preview.style.display = 'none'; return; }
   const emp = empleados.find(e => e.id === empId);
   if (!emp) return;
 
@@ -2987,15 +3018,14 @@ function actualizarPreviewVac() {
   const monto = horaBase * 8 * dias;
   const s = vacSaldo(empId);
   const pago = document.getElementById('vac-pago')?.value || 'efectivo';
-  const fechaIni = document.getElementById('vac-fecha-ini')?.value || '';
-  const fechaFin = document.getElementById('vac-fecha-fin')?.value || '';
   const periodo = periodoSel?.options[periodoSel.selectedIndex]?.text || '—';
 
-  let tipoLabel = tipo === 'ambas' ? '🌴💰 Disfrutadas y canceladas' :
-                  tipo === 'disfrutada' ? '🌴 Solo disfrutadas (descanso)' :
-                  '💰 Solo canceladas (pago)';
+  const tipoLabel = tipo === 'ambas' ? '🌴💰 Disfrutadas y canceladas' :
+                    tipo === 'disfrutada' ? '🌴 Solo disfrutadas (descanso)' :
+                    '💰 Solo canceladas (pago)';
 
-  const diasUsados = (tipo === 'ambas') ? dias * 2 : dias;
+  // Saldo: 'ambas' descuenta solo 1 vez (mismos días físicos)
+  const diasSaldo = dias;
 
   preview.style.display = '';
   preview.innerHTML = `
@@ -3003,13 +3033,13 @@ function actualizarPreviewVac() {
       <div><div style="font-size:11px;color:var(--text3)">Empleado</div><div style="font-weight:600">${emp.nombre}</div></div>
       <div><div style="font-size:11px;color:var(--text3)">Período</div><div style="font-weight:600">${periodo}</div></div>
       <div><div style="font-size:11px;color:var(--text3)">Tipo</div><div style="font-weight:600">${tipoLabel}</div></div>
-      <div><div style="font-size:11px;color:var(--text3)">Fechas</div><div style="font-weight:600">${fechaIni||'—'} al ${fechaFin||'—'}</div></div>
-      <div><div style="font-size:11px;color:var(--text3)">Días hábiles</div><div style="font-weight:600">${dias}</div></div>
-      <div><div style="font-size:11px;color:var(--text3)">Monto (sin CCSS)</div><div style="font-weight:700;color:var(--accent);font-family:'DM Mono',monospace">${fmtMon(monto)}</div></div>
+      <div><div style="font-size:11px;color:var(--text3)">Fechas</div><div style="font-weight:600">${fechaIni} al ${fechaFin}</div></div>
+      <div><div style="font-size:11px;color:var(--text3)">Días hábiles</div><div style="font-weight:700;color:var(--accent)">${dias}</div></div>
+      <div><div style="font-size:11px;color:var(--text3)">Monto (sin CCSS)</div><div style="font-weight:700;color:var(--accent);font-family:'DM Mono',monospace">${tipo === 'disfrutada' ? '—' : fmtMon(monto)}</div></div>
       ${tipo !== 'disfrutada' ? `<div><div style="font-size:11px;color:var(--text3)">Forma de pago</div><div style="font-weight:600">${pago === 'transferencia' ? 'Transferencia' : 'Efectivo'}</div></div>` : '<div></div>'}
-      <div style="grid-column:1/-1;border-top:1px solid var(--border);padding-top:.5rem;font-size:12px;color:${s.disponibles >= diasUsados ? 'var(--accent)' : 'var(--danger)'}">
-        Disponibles: <strong>${s.disponibles} días</strong> → usará: <strong>${diasUsados}</strong> → quedarán: <strong>${s.disponibles - diasUsados}</strong>
-        ${s.disponibles < diasUsados ? ' ⚠ Saldo insuficiente' : ' ✓'}
+      <div style="grid-column:1/-1;border-top:1px solid var(--border);padding-top:.5rem;font-size:12px;color:${s.disponibles >= diasSaldo ? 'var(--accent)' : 'var(--danger)'}">
+        Disponibles: <strong>${s.disponibles} días</strong> → usará: <strong>${diasSaldo}</strong> → quedarán: <strong>${s.disponibles - diasSaldo}</strong>
+        ${s.disponibles < diasSaldo ? ' ⚠ Saldo insuficiente' : ' ✓'}
       </div>
     </div>`;
 }
@@ -3036,7 +3066,7 @@ function registrarVacaciones() {
   if (!emp) return;
   const monto = (parseFloat(emp.horaBase) || 0) * 8 * dias;
   const s = vacSaldo(empId);
-  const diasUsados = (tipo === 'ambas') ? dias * 2 : dias;
+  const diasUsados = dias; // 'ambas' = mismos días físicos, descuenta 1 sola vez
 
   if (s.disponibles < diasUsados) {
     if (!confirm(`⚠ El empleado solo tiene ${s.disponibles} días disponibles (se usarán ${diasUsados}). ¿Registrar de todas formas?`)) return;
