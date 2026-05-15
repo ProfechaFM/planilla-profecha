@@ -455,22 +455,25 @@ tr:hover td{background:var(--bg)}
     <div class="card">
       <div class="card-title">Nueva solicitud de vacaciones</div>
       <div class="form-grid">
-        <div class="fg">
+        <div class="fg" style="grid-column:1/-1">
           <label>Empleado</label>
           <select id="vac-emp" onchange="actualizarPreviewVac()" style="font-size:13px;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--rs);background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif">
             <option value="">Seleccionar...</option>
           </select>
         </div>
-        <div class="fg">
-          <label>Tipo</label>
-          <select id="vac-tipo" onchange="actualizarPreviewVac()" style="font-size:13px;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--rs);background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif">
-            <option value="disfrutada">Disfrutadas (descanso)</option>
-            <option value="cancelada">Canceladas (pago en efectivo/transferencia)</option>
+        <div class="fg" style="grid-column:1/-1">
+          <label>Período de vacaciones</label>
+          <select id="vac-periodo" onchange="actualizarPreviewVac()" style="font-size:13px;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--rs);background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif">
+            <option value="">Seleccionar empleado primero...</option>
           </select>
         </div>
         <div class="fg">
-          <label>Días hábiles</label>
-          <input type="number" id="vac-dias" min="1" max="30" value="1" class="edit-inp" oninput="actualizarPreviewVac()" style="width:100%">
+          <label>Tipo de vacaciones</label>
+          <select id="vac-tipo" onchange="actualizarPreviewVac()" style="font-size:13px;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--rs);background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif">
+            <option value="ambas">Disfrutadas Y canceladas</option>
+            <option value="disfrutada">Solo disfrutadas (descanso)</option>
+            <option value="cancelada">Solo canceladas (pago)</option>
+          </select>
         </div>
         <div class="fg" id="vac-pago-wrap">
           <label>Forma de pago</label>
@@ -480,18 +483,27 @@ tr:hover td{background:var(--bg)}
           </select>
         </div>
         <div class="fg">
-          <label>Fecha</label>
-          <input type="date" id="vac-fecha" class="edit-inp" style="width:100%">
+          <label>Fecha inicio vacaciones</label>
+          <input type="date" id="vac-fecha-ini" class="edit-inp" oninput="actualizarPreviewVac()" style="width:100%">
+        </div>
+        <div class="fg">
+          <label>Fecha fin vacaciones</label>
+          <input type="date" id="vac-fecha-fin" class="edit-inp" oninput="actualizarPreviewVac()" style="width:100%">
+        </div>
+        <div class="fg">
+          <label>Días hábiles</label>
+          <input type="number" id="vac-dias" min="1" max="30" value="1" class="edit-inp" oninput="actualizarPreviewVac()" style="width:100%">
         </div>
         <div class="fg">
           <label>Nota (opcional)</label>
-          <input type="text" id="vac-nota-reg" placeholder="Ej: semana de descanso dic" class="edit-inp" style="width:100%">
+          <input type="text" id="vac-nota-reg" placeholder="Observación interna" class="edit-inp" style="width:100%">
         </div>
       </div>
       <div id="vac-preview" style="margin-top:1rem;padding:12px;background:var(--surface2);border-radius:8px;font-size:13px;display:none"></div>
-      <div style="margin-top:1rem;display:flex;gap:8px">
-        <button class="btn btn-p" onclick="registrarVacaciones()">Guardar vacaciones</button>
-        <button class="btn btn-s" onclick="calcularPreviewVac()">Calcular monto</button>
+      <div style="margin-top:1rem;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-p" onclick="registrarVacaciones()">Guardar y generar constancia</button>
+        <button class="btn btn-s" onclick="calcularPreviewVac()">Calcular preview</button>
+        <button class="btn btn-s" onclick="reabrirUltimaConstancia()" style="margin-left:auto">↩ Reabrir última constancia</button>
       </div>
     </div>
   </div>
@@ -509,7 +521,7 @@ tr:hover td{background:var(--bg)}
         </div>
       </div>
       <div class="tab-wrap">
-        <table><thead><tr><th>Fecha</th><th>ID</th><th>Empleado</th><th>Tipo</th><th style="text-align:right">Días</th><th style="text-align:right">Monto</th><th>Pago</th><th>Nota</th><th></th></tr></thead>
+        <table><thead><tr><th>Fecha</th><th>ID</th><th>Empleado</th><th>Período</th><th>Tipo</th><th>Fechas</th><th style="text-align:right">Días</th><th style="text-align:right">Monto</th><th>Pago</th><th>Acciones</th></tr></thead>
         <tbody id="vac-hist-tbody"></tbody></table>
       </div>
     </div>
@@ -2596,6 +2608,7 @@ function poblarVacEmpSelect() {
     empleados.filter(e => e.id !== '999').map(e =>
       `<option value="${e.id}"${e.id === actual ? ' selected' : ''}>${e.id} — ${e.nombre}</option>`
     ).join('');
+  if (actual) poblarVacPeriodos(actual);
 }
 
 function poblarVacHistEmp() {
@@ -2694,14 +2707,18 @@ function renderVacHistorial() {
     <td style="font-size:11px;color:var(--text3)">${r.fecha}</td>
     <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3)">${r.empId}</td>
     <td style="font-weight:500;font-size:12px">${r.nombre}</td>
+    <td style="font-size:11px;color:var(--text3)">${r.periodoLabel||r.periodo||'—'}</td>
     <td>${r.tipo === 'cancelada' ? '💰 Cancelada' : '🌴 Disfrutada'}</td>
+    <td style="font-size:11px;color:var(--text3)">${r.fechaIni||'—'} → ${r.fechaFin||'—'}</td>
     <td style="text-align:right;font-family:'DM Mono',monospace">${r.dias}</td>
-    <td style="text-align:right;font-family:'DM Mono',monospace;color:var(--accent)">${fmtMon(r.monto)}</td>
-    <td>${r.pago === 'transferencia' ? 'Transferencia' : r.pago === 'disfrutada' ? '—' : 'Efectivo'}</td>
-    <td style="font-size:11px;color:var(--text3)">${r.nota || '—'}</td>
-    <td><button class="btn btn-d" style="font-size:10px;padding:2px 7px" onclick="eliminarVac('${r.id}')">✕</button></td>
+    <td style="text-align:right;font-family:'DM Mono',monospace;color:var(--accent)">${r.monto>0?fmtMon(r.monto):'—'}</td>
+    <td>${r.pago === 'transferencia' ? 'Transf' : r.pago === 'disfrutada' ? '—' : 'Efectivo'}</td>
+    <td style="display:flex;gap:4px">
+      ${r.grupoId?`<button class="btn btn-s" style="font-size:10px;padding:2px 6px" onclick="reabrirConstanciaById('${r.grupoId}')">📄</button>`:''}
+      <button class="btn btn-d" style="font-size:10px;padding:2px 7px" onclick="eliminarVac('${r.id}')">✕</button>
+    </td>
   </tr>`).join('')
-  : '<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:2rem">Sin registros</td></tr>';
+  : '<tr><td colspan="10" style="text-align:center;color:var(--text3);padding:2rem">Sin registros</td></tr>';
 }
 
 function eliminarVac(id) {
@@ -2899,6 +2916,310 @@ function exportarRebajosExcel() {
   XLSX.writeFile(wb, 'Rebajos_Profecha.xlsx');
 }
 
+
+// ══════════════════════════════════════════════════════════════════
+// VACACIONES v2 — períodos, fechas inicio/fin, tipo combinado, constancia
+// ══════════════════════════════════════════════════════════════════
+
+// Genera los períodos anuales disponibles para un empleado según fecha ingreso
+function vacPeriodosDisponibles(empId) {
+  const fechaStr = FECHAS_INGRESO[empId];
+  if (!fechaStr) return [];
+  const ingreso = new Date(fechaStr);
+  const hoy = new Date();
+  const periodos = [];
+  // Primer período: año de ingreso → año de ingreso + 1
+  let anioInicio = ingreso.getFullYear();
+  while (true) {
+    const inicio = new Date(anioInicio, ingreso.getMonth(), ingreso.getDate());
+    const fin = new Date(anioInicio + 1, ingreso.getMonth(), ingreso.getDate() - 1);
+    if (inicio > hoy) break;
+    periodos.push({
+      label: `${anioInicio} — ${anioInicio + 1}`,
+      value: `${anioInicio}-${anioInicio + 1}`,
+      inicio, fin
+    });
+    anioInicio++;
+    if (anioInicio > hoy.getFullYear() + 1) break;
+  }
+  return periodos.reverse(); // más reciente primero
+}
+
+function poblarVacPeriodos(empId) {
+  const sel = document.getElementById('vac-periodo');
+  if (!sel) return;
+  const periodos = vacPeriodosDisponibles(empId);
+  if (!periodos.length) {
+    sel.innerHTML = '<option value="">Sin fecha de ingreso registrada</option>';
+    return;
+  }
+  sel.innerHTML = periodos.map((p, i) =>
+    `<option value="${p.value}"${i === 0 ? ' selected' : ''}>${p.label}</option>`
+  ).join('');
+}
+
+// Override actualizarPreviewVac with improved version
+function actualizarPreviewVac() {
+  const empId = document.getElementById('vac-emp')?.value;
+  const tipo = document.getElementById('vac-tipo')?.value;
+  const dias = parseInt(document.getElementById('vac-dias')?.value) || 0;
+  const pagoWrap = document.getElementById('vac-pago-wrap');
+  const preview = document.getElementById('vac-preview');
+  const periodoSel = document.getElementById('vac-periodo');
+
+  // Show/hide pago based on tipo
+  if (pagoWrap) pagoWrap.style.display = (tipo === 'disfrutada') ? 'none' : '';
+
+  // Populate períodos when employee changes
+  if (empId && periodoSel) {
+    const periodos = vacPeriodosDisponibles(empId);
+    if (periodoSel.children.length <= 1 || periodoSel.dataset.empId !== empId) {
+      poblarVacPeriodos(empId);
+      periodoSel.dataset.empId = empId;
+    }
+  }
+
+  if (!empId || !dias || !preview) { if (preview) preview.style.display = 'none'; return; }
+  const emp = empleados.find(e => e.id === empId);
+  if (!emp) return;
+
+  const horaBase = parseFloat(emp.horaBase) || 0;
+  const monto = horaBase * 8 * dias;
+  const s = vacSaldo(empId);
+  const pago = document.getElementById('vac-pago')?.value || 'efectivo';
+  const fechaIni = document.getElementById('vac-fecha-ini')?.value || '';
+  const fechaFin = document.getElementById('vac-fecha-fin')?.value || '';
+  const periodo = periodoSel?.options[periodoSel.selectedIndex]?.text || '—';
+
+  let tipoLabel = tipo === 'ambas' ? '🌴💰 Disfrutadas y canceladas' :
+                  tipo === 'disfrutada' ? '🌴 Solo disfrutadas (descanso)' :
+                  '💰 Solo canceladas (pago)';
+
+  const diasUsados = (tipo === 'ambas') ? dias * 2 : dias;
+
+  preview.style.display = '';
+  preview.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem">
+      <div><div style="font-size:11px;color:var(--text3)">Empleado</div><div style="font-weight:600">${emp.nombre}</div></div>
+      <div><div style="font-size:11px;color:var(--text3)">Período</div><div style="font-weight:600">${periodo}</div></div>
+      <div><div style="font-size:11px;color:var(--text3)">Tipo</div><div style="font-weight:600">${tipoLabel}</div></div>
+      <div><div style="font-size:11px;color:var(--text3)">Fechas</div><div style="font-weight:600">${fechaIni||'—'} al ${fechaFin||'—'}</div></div>
+      <div><div style="font-size:11px;color:var(--text3)">Días hábiles</div><div style="font-weight:600">${dias}</div></div>
+      <div><div style="font-size:11px;color:var(--text3)">Monto (sin CCSS)</div><div style="font-weight:700;color:var(--accent);font-family:'DM Mono',monospace">${fmtMon(monto)}</div></div>
+      ${tipo !== 'disfrutada' ? `<div><div style="font-size:11px;color:var(--text3)">Forma de pago</div><div style="font-weight:600">${pago === 'transferencia' ? 'Transferencia' : 'Efectivo'}</div></div>` : '<div></div>'}
+      <div style="grid-column:1/-1;border-top:1px solid var(--border);padding-top:.5rem;font-size:12px;color:${s.disponibles >= diasUsados ? 'var(--accent)' : 'var(--danger)'}">
+        Disponibles: <strong>${s.disponibles} días</strong> → usará: <strong>${diasUsados}</strong> → quedarán: <strong>${s.disponibles - diasUsados}</strong>
+        ${s.disponibles < diasUsados ? ' ⚠ Saldo insuficiente' : ' ✓'}
+      </div>
+    </div>`;
+}
+
+// Override registrarVacaciones with improved version
+function registrarVacaciones() {
+  const empId = document.getElementById('vac-emp')?.value;
+  const tipo = document.getElementById('vac-tipo')?.value;
+  const dias = parseInt(document.getElementById('vac-dias')?.value) || 0;
+  const pago = document.getElementById('vac-pago')?.value || 'efectivo';
+  const fechaIni = document.getElementById('vac-fecha-ini')?.value || '';
+  const fechaFin = document.getElementById('vac-fecha-fin')?.value || '';
+  const nota = document.getElementById('vac-nota-reg')?.value || '';
+  const periodoSel = document.getElementById('vac-periodo');
+  const periodo = periodoSel?.value || '';
+  const periodoLabel = periodoSel?.options[periodoSel.selectedIndex]?.text || '';
+
+  if (!empId) { toast('Seleccioná un empleado', 'warn'); return; }
+  if (!dias || dias < 1) { toast('Ingresá la cantidad de días', 'warn'); return; }
+  if (!fechaIni) { toast('Ingresá la fecha de inicio', 'warn'); return; }
+  if (!fechaFin) { toast('Ingresá la fecha de fin', 'warn'); return; }
+
+  const emp = empleados.find(e => e.id === empId);
+  if (!emp) return;
+  const monto = (parseFloat(emp.horaBase) || 0) * 8 * dias;
+  const s = vacSaldo(empId);
+  const diasUsados = (tipo === 'ambas') ? dias * 2 : dias;
+
+  if (s.disponibles < diasUsados) {
+    if (!confirm(`⚠ El empleado solo tiene ${s.disponibles} días disponibles (se usarán ${diasUsados}). ¿Registrar de todas formas?`)) return;
+  }
+
+  const id = Date.now().toString();
+  const fechaHoy = new Date().toISOString().split('T')[0];
+
+  // Create records based on tipo
+  const registros = [];
+  if (tipo === 'disfrutada' || tipo === 'ambas') {
+    registros.push({
+      id: id + '_d', empId, nombre: emp.nombre,
+      tipo: 'disfrutada', dias, monto: 0,
+      pago: 'disfrutada', fecha: fechaHoy,
+      fechaIni, fechaFin, periodo, periodoLabel, nota,
+      grupoId: id
+    });
+  }
+  if (tipo === 'cancelada' || tipo === 'ambas') {
+    registros.push({
+      id: id + '_c', empId, nombre: emp.nombre,
+      tipo: 'cancelada', dias, monto,
+      pago, fecha: fechaHoy,
+      fechaIni, fechaFin, periodo, periodoLabel, nota,
+      grupoId: id
+    });
+  }
+
+  registros.forEach(r => {
+    vacRegistros.unshift(r);
+    if (accessToken) guardarVacEnSheets(r);
+  });
+
+  try { localStorage.setItem('planilla_vac_registros', JSON.stringify(vacRegistros)); } catch(e) {}
+  toast('Vacaciones registradas correctamente', 'ok');
+
+  // Generate constancia
+  generarConstanciaVacaciones({
+    emp, dias, fechaIni, fechaFin, periodo: periodoLabel,
+    tipo, pago, monto, fechaDoc: fechaHoy, grupoId: id
+  });
+
+  renderVacSaldo();
+  // Clear form
+  document.getElementById('vac-dias').value = 1;
+  document.getElementById('vac-nota-reg').value = '';
+  document.getElementById('vac-fecha-ini').value = '';
+  document.getElementById('vac-fecha-fin').value = '';
+  document.getElementById('vac-preview').style.display = 'none';
+}
+
+// Generate and show printable constancia
+function generarConstanciaVacaciones(data) {
+  const { emp, dias, fechaIni, fechaFin, periodo, tipo, pago, monto, fechaDoc, grupoId } = data;
+  const fechaDocFmt = new Date(fechaDoc + 'T12:00:00').toLocaleDateString('es-CR', {day:'2-digit',month:'long',year:'numeric'});
+  const fmtFecha = f => {
+    if (!f) return '___/___/______';
+    const d = new Date(f + 'T12:00:00');
+    return d.toLocaleDateString('es-CR', {day:'2-digit', month:'long', year:'numeric'});
+  };
+
+  const tipoTexto = tipo === 'ambas'
+    ? 'disfrutadas y debidamente canceladas'
+    : tipo === 'disfrutada'
+    ? 'disfrutadas (período de descanso)'
+    : 'canceladas (pago sin disfrute)';
+
+  const pagoTexto = tipo === 'disfrutada' ? '' :
+    `<p style="margin:.6rem 0">El pago correspondiente a estos días se realizó mediante <strong>${pago === 'transferencia' ? 'transferencia bancaria' : 'efectivo'}</strong>, por un monto de <strong>${fmtMon(monto)}</strong>, conforme al salario ordinario de la colaboradora.</p>`;
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Constancia de Vacaciones</title>
+<style>
+  @page { margin: 2cm; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; font-size: 13px; color: #1a1917; line-height: 1.6; margin: 0; padding: 0; }
+  .header { display: flex; align-items: center; gap: 1.5rem; border-bottom: 3px solid #2d5a3d; padding-bottom: 1rem; margin-bottom: 1.5rem; }
+  .logo { width: 80px; height: 80px; object-fit: contain; border-radius: 8px; }
+  .header-text h1 { margin: 0; font-size: 22px; color: #2d5a3d; }
+  .header-text p { margin: 2px 0; font-size: 12px; color: #666; }
+  .titulo { text-align: center; font-size: 17px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin: 1.5rem 0; color: #1a1917; }
+  .fecha-doc { text-align: right; font-size: 12px; color: #666; margin-bottom: 1rem; }
+  .cuerpo { text-align: justify; margin-bottom: 1rem; }
+  .cuerpo p { margin: .7rem 0; }
+  .datos { background: #f5f4f0; border-radius: 8px; padding: 1rem 1.2rem; margin: 1rem 0; }
+  .dato-row { display: flex; gap: 1rem; margin-bottom: .4rem; font-size: 12px; }
+  .dato-label { color: #666; min-width: 120px; }
+  .dato-val { font-weight: 600; }
+  .firmas { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; margin-top: 3rem; }
+  .firma-campo { text-align: center; }
+  .firma-linea { border-top: 1px solid #333; padding-top: .4rem; margin-top: 2rem; font-size: 12px; color: #444; }
+  .doc-id { font-size: 10px; color: #aaa; text-align: right; margin-top: 2rem; }
+  @media print { .no-print { display: none !important; } }
+</style>
+</head>
+<body>
+<div class="no-print" style="background:#2d5a3d;color:#fff;padding:.5rem 1rem;display:flex;gap:1rem;align-items:center;margin-bottom:1rem">
+  <span style="font-size:13px;font-weight:500">Constancia generada — podés imprimirla o guardarla</span>
+  <button onclick="window.print()" style="background:#fff;color:#2d5a3d;border:none;padding:5px 14px;border-radius:5px;font-weight:600;cursor:pointer;font-size:13px">🖨 Imprimir</button>
+  <button onclick="window.close()" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.4);padding:5px 12px;border-radius:5px;cursor:pointer;font-size:13px">Cerrar</button>
+</div>
+
+<div class="header">
+  <img class="logo" src="https://media-cdn.tripadvisor.com/media/photo-s/04/a0/da/cc/la-fiesta-del-maiz.jpg" alt="Logo Profecha" onerror="this.style.display='none'">
+  <div class="header-text">
+    <h1>Restaurante La Fiesta de Maíz</h1>
+    <p>Profecha S.A. · Guanacaste, Costa Rica</p>
+    <p>Planilla y Recursos Humanos</p>
+  </div>
+</div>
+
+<div class="titulo">Constancia de Vacaciones</div>
+<div class="fecha-doc">Fecha de emisión: ${fechaDocFmt}</div>
+
+<div class="cuerpo">
+  <p>Por medio de la presente se hace constar que el/la colaborador/a <strong>${emp.nombre}</strong>, portador/a de la cédula de identidad <strong>${emp.cedula || '___________________'}</strong>, con puesto de <strong>${emp.puesto || '___________________'}</strong>, gozó de sus vacaciones ${tipoTexto}, correspondientes al período <strong>${periodo}</strong>, conforme a lo establecido en el Código de Trabajo de Costa Rica.</p>
+</div>
+
+<div class="datos">
+  <div class="dato-row"><span class="dato-label">Período laboral:</span><span class="dato-val">${periodo}</span></div>
+  <div class="dato-row"><span class="dato-label">Días hábiles:</span><span class="dato-val">${dias} días</span></div>
+  <div class="dato-row"><span class="dato-label">Fecha inicio:</span><span class="dato-val">${fmtFecha(fechaIni)}</span></div>
+  <div class="dato-row"><span class="dato-label">Fecha fin:</span><span class="dato-val">${fmtFecha(fechaFin)}</span></div>
+  <div class="dato-row"><span class="dato-label">Tipo:</span><span class="dato-val">${tipoTexto.charAt(0).toUpperCase() + tipoTexto.slice(1)}</span></div>
+  ${tipo !== 'disfrutada' ? `<div class="dato-row"><span class="dato-label">Monto cancelado:</span><span class="dato-val">${fmtMon(monto)}</span></div>` : ''}
+</div>
+
+<div class="cuerpo">
+  ${pagoTexto}
+  <p>Se deja constancia de que la relación laboral se mantuvo vigente durante este período, respetándose los derechos y obligaciones de ambas partes, conforme a la normativa laboral vigente.</p>
+</div>
+
+<div class="firmas">
+  <div class="firma-campo">
+    <div class="firma-linea">Atentamente,<br>Encargado/a de planilla<br><em style="font-size:11px;color:#aaa">Firma y nombre</em></div>
+  </div>
+  <div class="firma-campo">
+    <div class="firma-linea">Recibido por,<br>${emp.nombre}<br><em style="font-size:11px;color:#aaa">Cédula: ${emp.cedula || '_______________'}</em></div>
+  </div>
+</div>
+
+<div class="doc-id">Ref: ${grupoId} · Generado por Planilla Profecha</div>
+
+<script>
+  // Auto focus for immediate print if opened intentionally
+  window.focus();
+<\/script>
+</body>
+</html>`;
+
+  // Store for reopen
+  try { localStorage.setItem('planilla_ultima_constancia_' + grupoId, html); } catch(e) {}
+  try { localStorage.setItem('planilla_ultima_constancia_id', grupoId); } catch(e) {}
+
+  const win = window.open('', '_blank', 'width=850,height=700');
+  if (!win) { toast('Permitir ventanas emergentes para ver la constancia', 'warn', 5000); return; }
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+}
+
+function reabrirUltimaConstancia() {
+  const id = localStorage.getItem('planilla_ultima_constancia_id');
+  if (!id) { toast('Sin constancia guardada', 'warn'); return; }
+  const html = localStorage.getItem('planilla_ultima_constancia_' + id);
+  if (!html) { toast('La constancia ya no está en caché', 'warn'); return; }
+  const win = window.open('', '_blank', 'width=850,height=700');
+  if (!win) { toast('Permitir ventanas emergentes', 'warn'); return; }
+  win.document.open(); win.document.write(html); win.document.close();
+}
+
+function reabrirConstanciaById(grupoId) {
+  const html = localStorage.getItem('planilla_ultima_constancia_' + grupoId);
+  if (!html) { toast('Constancia no disponible en caché — fue generada en otra sesión', 'warn', 4000); return; }
+  const win = window.open('', '_blank', 'width=850,height=700');
+  if (!win) { toast('Permitir ventanas emergentes', 'warn'); return; }
+  win.document.open(); win.document.write(html); win.document.close();
+}
+
 // Init
 const anioSel=document.getElementById('hist-anio');
 const y=new Date().getFullYear();
@@ -2918,7 +3239,7 @@ updateHeader();renderSchedule();renderEmpTable();actualizarInicio();
 // Set default dates
 (()=>{
   const hoy = new Date().toISOString().split('T')[0];
-  ['vac-fecha','reb-fecha'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=hoy;});
+  ['vac-fecha-ini','vac-fecha-fin','reb-fecha'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=hoy;});
 })();
 // Poblar selector año historial
 (()=>{
