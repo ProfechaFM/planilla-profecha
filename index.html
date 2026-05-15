@@ -457,24 +457,24 @@ tr:hover td{background:var(--bg)}
       <div class="form-grid">
         <div class="fg">
           <label>Empleado</label>
-          <select id="vac-emp" style="font-size:13px;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--rs);background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif">
+          <select id="vac-emp" onchange="actualizarPreviewVac()" style="font-size:13px;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--rs);background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif">
             <option value="">Seleccionar...</option>
           </select>
         </div>
         <div class="fg">
           <label>Tipo</label>
-          <select id="vac-tipo" style="font-size:13px;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--rs);background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif">
+          <select id="vac-tipo" onchange="actualizarPreviewVac()" style="font-size:13px;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--rs);background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif">
             <option value="disfrutada">Disfrutadas (descanso)</option>
             <option value="cancelada">Canceladas (pago en efectivo/transferencia)</option>
           </select>
         </div>
         <div class="fg">
           <label>Días hábiles</label>
-          <input type="number" id="vac-dias" min="1" max="30" value="1" class="edit-inp" style="width:100%">
+          <input type="number" id="vac-dias" min="1" max="30" value="1" class="edit-inp" oninput="actualizarPreviewVac()" style="width:100%">
         </div>
         <div class="fg" id="vac-pago-wrap">
           <label>Forma de pago</label>
-          <select id="vac-pago" style="font-size:13px;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--rs);background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif">
+          <select id="vac-pago" onchange="actualizarPreviewVac()" style="font-size:13px;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--rs);background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif">
             <option value="efectivo">Efectivo</option>
             <option value="transferencia">Transferencia</option>
           </select>
@@ -908,6 +908,11 @@ tr:hover td{background:var(--bg)}
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
+// ── Utilities (defined first — used throughout) ──────────────────
+function debounce(fn,ms=400){let tid;return(...args)=>{clearTimeout(tid);tid=setTimeout(()=>fn(...args),ms);};}
+const MESES_ES=['ene','feb','mar','abr','may','jun','jul','ago','set','oct','nov','dic'];
+const _recalcDebounced=debounce(()=>{if(resultados.length)recalcularSilencioso();},500);
+
 const CLIENT_ID='208106774559-e48u19274onhe0fsc47kqh9ki4q5kosg.apps.googleusercontent.com';
 const SCOPES='https://www.googleapis.com/auth/spreadsheets';
 const DENOMS=[20000,10000,5000,2000,1000,500];
@@ -1574,7 +1579,6 @@ function renderEmpTable(){
     :'<tr><td colspan="10" style="text-align:center;color:var(--text3);padding:2rem">Sin empleados</td></tr>';
 }
 
-const _recalcDebounced = debounce(()=>{ if(resultados.length) recalcularSilencioso(); }, 500);
 
 function updateEmp(i,field,val){
   const antes = empleados[i][field];
@@ -1883,7 +1887,7 @@ async function cargarHorarioDesdeSheets(){
   if(!accessToken){toast('Conectate primero en Configuración','warn');return;}
   const etiqueta=weekLabel();
   try{
-    const d=await sheetsGet('Horarios!A1:R500');
+    const d=await sheetsGet('Horarios!A1:Q4000');
     const rows=d.values||[];
     let bloqueInicio=-1;
     for(let i=0;i<rows.length;i++){
@@ -2180,7 +2184,6 @@ function toast(msg, type='info', duration=3000){
 }
 
 // ── Debounce ─────────────────────────────────────────────────────────
-function debounce(fn,ms=400){let tid;return(...args)=>{clearTimeout(tid);tid=setTimeout(()=>fn(...args),ms);};}
 
 // ── Unified calculation engine ───────────────────────────────────────
 function calcularEmpleado(empId,wData,cfg,feriados){
@@ -2372,8 +2375,8 @@ async function autoCargarAlConectar(){
 // ── Silent autosave to Sheets (for empleados) ───────────────────────
 async function guardarEmpleadosSheets(silent=false){
   if(!accessToken)return;
-  const header=[['ID_ZKteco','Nombre','Cedula','Puesto','Cuenta','Hora_Base','Fijo_Semanal','CCSS','Tipo_Pago','Nota']];
-  const rows=empleados.map(e=>[e.id,e.nombre,e.cedula||'',e.puesto||'',e.cuenta||'N/A',e.horaBase||0,e.fijo||0,e.ccss||'',e.pago||'efectivo',e.nota||'']);
+  const header=[['ID_ZKteco','Nombre','Cedula','Puesto','Cuenta','Hora_Base','Fijo_Semanal','CCSS','Tipo_Pago','Nota','Fecha_Ingreso']];
+  const rows=empleados.map(e=>[e.id,e.nombre,e.cedula||'',e.puesto||'',e.cuenta||'N/A',e.horaBase||0,e.fijo||0,e.ccss||'',e.pago||'efectivo',e.nota||'',FECHAS_INGRESO[e.id]||'']);
   try{
     await sheetsWrite('Base Datos!A1',[...header,...rows]);
     if(!silent)toast('Empleados guardados','ok');
@@ -2381,7 +2384,6 @@ async function guardarEmpleadosSheets(silent=false){
 }
 
 // ── Historial mejorado ────────────────────────────────────────────────
-const MESES_ES=['ene','feb','mar','abr','may','jun','jul','ago','set','oct','nov','dic'];
 function parsearEtiquetaSemana(etiqueta){
   const m=etiqueta.match(/(\d{1,2})\s+([a-záéíóú.]+)\s+(\d{4})/i);
   if(!m)return null;
@@ -2844,8 +2846,16 @@ function aplicarRebajosAlCalculo() {
     if (cuotaAplicar <= 0) return;
 
     resultado.neto -= cuotaAplicar;
-    resultado.netoEf = resultado.emp?.pago === 'transferencia' ? 0 : resultado.neto;
-    resultado.netoTr = resultado.emp?.pago === 'transferencia' ? resultado.neto : 0;
+    if(resultado.isSplit){
+      // Para split: rebajar del netoTr (transferencia, normales)
+      resultado.netoTr = Math.max(0, resultado.netoTr - cuotaAplicar);
+    } else if(resultado.emp?.pago === 'transferencia'){
+      resultado.netoTr = resultado.neto;
+      resultado.netoEf = 0;
+    } else {
+      resultado.netoEf = resultado.neto;
+      resultado.netoTr = 0;
+    }
     resultado.rebajoRebajo = (resultado.rebajoRebajo || 0) + cuotaAplicar;
 
     r.pagado += cuotaAplicar;
