@@ -1302,6 +1302,7 @@ function calcularPago(){
   document.getElementById('m-neto-ef').textContent=fmtMon(totEf);
   document.getElementById('m-neto-tr').textContent=fmtMon(totTr);
   aplicarRebajosAlCalculo();
+  aplicarVacacionesAlCalculo();
   renderCalculo();renderTransferencias();renderBilletes();renderComprobantes();
   toast('Planilla calculada correctamente','ok');
 }
@@ -1330,16 +1331,47 @@ function renderCalculo(){
 }
 
 function renderTransferencias(){
-  const trItems=resultados.filter(r=>r.netoTr>0&&!r.sinPerfil);
-  let total=0;
-  document.getElementById('transfer-body').innerHTML=trItems.length?trItems.map(r=>{total+=r.netoTr;return`<tr>
-    <td style="font-weight:500">${r.nombre}</td>
-    <td style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text2)">${r.emp.cuenta||'—'}</td>
-    <td>${r.isSplit?'<span class="badge b-split">Split-normales</span>':'<span class="badge b-tr">Completo</span>'}</td>
-    <td style="text-align:right;font-weight:600;font-family:'DM Mono',monospace">${fmtMon(r.netoTr)}</td>
-    <td style="font-size:12px;color:var(--text2)">Planilla semana al ${fmtDate(addDays(currentWeekStart,6))}</td>
-  </tr>`}).join(''):'<tr><td colspan="5" style="text-align:center;color:var(--text3)">Sin transferencias</td></tr>';
-  document.getElementById('transfer-total').textContent=fmtMon(total);
+  const semFin = fmtDate(addDays(currentWeekStart,6));
+  const trItems = resultados.filter(r => !r.sinPerfil);
+  let total = 0;
+  const rows = [];
+
+  trItems.forEach(r => {
+    const salarioTr = r.netoTr - (r.vacTr || 0);
+    const vacTr = r.vacTr || 0;
+
+    // Salary row (if has salary transfer)
+    if (salarioTr > 0) {
+      total += salarioTr;
+      rows.push(`<tr>
+        <td style="font-weight:500">${r.nombre}</td>
+        <td style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text2)">${r.emp?.cuenta||'—'}</td>
+        <td>${r.isSplit?'<span class="badge b-split">Split-normales</span>':'<span class="badge b-tr">Completo</span>'}</td>
+        <td style="text-align:right;font-weight:600;font-family:'DM Mono',monospace">${fmtMon(salarioTr)}</td>
+        <td style="font-size:12px;color:var(--text2)">Planilla semana al ${semFin}</td>
+      </tr>`);
+    }
+
+    // Vacation rows (separate line per vacation event)
+    if (vacTr > 0 && r.vacaciones) {
+      r.vacaciones.filter(v => v.pago === 'transferencia').forEach(v => {
+        total += v.monto;
+        const concepto = `Pago de ${v.dias} día${v.dias!==1?'s':''} de vacaciones${v.periodo?' del período '+v.periodo:''}`;
+        rows.push(`<tr style="background:var(--warn-l)">
+          <td style="font-weight:500">${r.nombre}</td>
+          <td style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text2)">${r.emp?.cuenta||'—'}</td>
+          <td><span class="badge" style="background:#fef3c7;color:#92400e">Vacaciones</span></td>
+          <td style="text-align:right;font-weight:600;font-family:'DM Mono',monospace;color:var(--warn-d)">${fmtMon(v.monto)}</td>
+          <td style="font-size:12px;color:var(--text2)">${concepto}</td>
+        </tr>`);
+      });
+    }
+  });
+
+  document.getElementById('transfer-body').innerHTML = rows.length
+    ? rows.join('')
+    : '<tr><td colspan="5" style="text-align:center;color:var(--text3)">Sin transferencias</td></tr>';
+  document.getElementById('transfer-total').textContent = fmtMon(total);
 }
 
 function calcBilletes(m){const r={};let rem=Math.round(m);DENOMS.forEach(d=>{r[d]=Math.floor(rem/d);rem-=r[d]*d;});return r;}
@@ -1356,8 +1388,9 @@ function renderBilletes(){
     const nombre=(r.emp?(r.emp.nombre+' '+r.emp.apellidos):r.nombre||'').split(' ').slice(0,3).join(' ');
     const difSign=redondeado>=r.netoEf?'+':'-';
     const dif=Math.abs(redondeado-r.netoEf);
+    const vacLabel = r.vacEf>0?` <span style="font-size:9px;background:#fef3c7;color:#92400e;padding:1px 4px;border-radius:3px">+vac ${fmtMon(r.vacEf)}</span>`:'';
     return`<tr>
-      <td>${nombre}${r.isSplit?' <span class="badge b-split" style="font-size:9px">extras</span>':''}</td>
+      <td>${nombre}${r.isSplit?' <span class="badge b-split" style="font-size:9px">extras</span>':''}${vacLabel}</td>
       <td style="font-family:'DM Mono',monospace;color:var(--text2);font-size:12px">${fmtMon(r.netoEf)}</td>
       <td style="font-family:'DM Mono',monospace;font-weight:500">${fmtMon(redondeado)} <span style="font-size:10px;color:${dif===0?'var(--text3)':redondeado>r.netoEf?'var(--accent)':'var(--danger)'}">${dif===0?'=':difSign+fmtMon(dif)}</span></td>
       ${DENOMS.map(d=>`<td style="text-align:right;font-family:'DM Mono',monospace">${b[d]||'—'}</td>`).join('')}
@@ -1472,7 +1505,8 @@ function renderComprobantes(){
       ${r.rebajoCC>0?`<div class="comp-row" style="color:var(--danger)"><span>Rebajo CCSS (${cfg.ccss}%)${r.isSplit?' — solo sobre horas normales':''}</span><span>-${fmtMon(r.rebajoCC)}</span></div>`:''}
       ${r.rebajoRebajo>0?`<div class="comp-row" style="color:var(--danger)"><span>Rebajo préstamo / daño</span><span>-${fmtMon(r.rebajoRebajo)}</span></div>`:''}
       <div class="comp-total"><span>SALARIO NETO</span><span>${fmtMon(r.neto)}</span></div>
-      ${r.isSplit?`<div style="margin-top:8px;padding:8px;background:var(--warn-l);border-radius:4px;font-size:11px"><strong>Desglose:</strong> Transferencia (normales - CCSS): ${fmtMon(r.netoTr)} · Efectivo (extras sin rebajo): ${fmtMon(r.netoEf)}</div>`:''}
+      ${r.isSplit?`<div style="margin-top:3px;padding:3px 6px;background:var(--warn-l);border-radius:4px;font-size:10px"><strong>Desglose:</strong> Transferencia: ${fmtMon((r.netoTr||0)-(r.vacTr||0))} · Efectivo: ${fmtMon((r.netoEf||0)-(r.vacEf||0))}</div>`:''}
+      ${r.vacaciones&&r.vacaciones.length?`<div style="margin-top:3px;padding:4px 6px;background:#fef3c7;border-radius:4px;font-size:10px;border-left:3px solid #b7791f"><strong style="color:#92400e">Vacaciones:</strong> ${r.vacaciones.map(v=>`${v.dias} día${v.dias!==1?'s':''} · ${fmtMon(v.monto)} (${v.pago==='transferencia'?'Transfer':'Efectivo'})${v.periodo?' · '+v.periodo:''}`).join(' | ')}</div>`:''}
       <div class="comp-firma">
         <span>Pago: ${r.isSplit?'Mixto':r.emp.pago==='transferencia'?'Transferencia':'Efectivo'}</span>
         <span>Cédula: <span style="display:inline-block;border-bottom:1px solid var(--border2);width:120px;vertical-align:bottom">&nbsp;</span></span>
@@ -2531,12 +2565,22 @@ function vacDiasGanados(empId) {
 function vacSaldo(empId) {
   const ganados = vacDiasGanados(empId);
   const aj = vacAjustes[empId] || { canceladas: 0, disfrutadas: 0 };
-  const usadosCanceladas = vacRegistros.filter(r => r.empId === empId && r.tipo === 'cancelada').reduce((s, r) => s + r.dias, 0);
-  const usadosDisfrutadas = vacRegistros.filter(r => r.empId === empId && r.tipo === 'disfrutada').reduce((s, r) => s + r.dias, 0);
-  const totalCanceladas = aj.canceladas + usadosCanceladas;
-  const totalDisfrutadas = aj.disfrutadas + usadosDisfrutadas;
-  const disponibles = ganados - totalCanceladas - totalDisfrutadas;
-  return { ganados, canceladas: totalCanceladas, disfrutadas: totalDisfrutadas, disponibles };
+  // Ajuste inicial: días consumidos ANTES de la app — solo reduce el disponible
+  const ajusteTotal = (aj.canceladas || 0) + (aj.disfrutadas || 0);
+  // Registros nuevos en la app: contar grupoId único para no duplicar "ambas"
+  const gruposContados = new Set();
+  let regCanceladas = 0, regDisfrutadas = 0, regDias = 0;
+  vacRegistros.filter(r => r.empId === empId).forEach(r => {
+    if (r.grupoId) {
+      if (gruposContados.has(r.grupoId)) return; // ya contado
+      gruposContados.add(r.grupoId);
+    }
+    regDias += r.dias;
+    if (r.tipo === 'cancelada') regCanceladas += r.dias;
+    if (r.tipo === 'disfrutada') regDisfrutadas += r.dias;
+  });
+  const disponibles = ganados - ajusteTotal - regDias;
+  return { ganados, canceladas: regCanceladas, disfrutadas: regDisfrutadas, disponibles };
 }
 
 function vacTab(tab) {
@@ -2856,6 +2900,77 @@ function eliminarRebajo(id) {
 }
 
 // Aplicar rebajos automáticamente al calcular planilla
+
+// ══ Aplicar vacaciones al cálculo de pago de la semana ══════════════
+// Busca registros de vacaciones "canceladas" sin semana aplicada aún
+// y los suma al resultado del empleado para esa semana
+function aplicarVacacionesAlCalculo() {
+  const semana = weekLabel();
+
+  // Get all unpaid cancelada vacation records (type cancelada or ambas)
+  // that haven't been applied to a week yet
+  const pendientes = vacRegistros.filter(r =>
+    r.tipo === 'cancelada' && !r.semanaAplicada && r.monto > 0
+  );
+
+  if (!pendientes.length) return;
+
+  // Deduplicate by grupoId — only apply once per vacation event
+  const gruposAplicados = new Set();
+
+  pendientes.forEach(r => {
+    if (r.grupoId && gruposAplicados.has(r.grupoId)) return;
+    if (r.grupoId) gruposAplicados.add(r.grupoId);
+
+    const resultado = resultados.find(res => res.empId === r.empId);
+    const emp = empleados.find(e => e.id === r.empId);
+    if (!emp) return;
+
+    // Vacation pay: no CCSS, no descanso, no rebajos
+    const montoVac = r.monto;
+    const pago = r.pago || emp.pago || 'efectivo';
+
+    if (resultado) {
+      // Employee has hours this week — add vacation to existing result
+      if (!resultado.vacaciones) resultado.vacaciones = [];
+      resultado.vacaciones.push({
+        dias: r.dias, monto: montoVac, pago,
+        periodo: r.periodoLabel || r.periodo || '',
+        registroId: r.id, grupoId: r.grupoId
+      });
+      if (pago === 'transferencia') {
+        resultado.netoTr += montoVac;
+        resultado.vacTr = (resultado.vacTr || 0) + montoVac;
+      } else {
+        resultado.netoEf += montoVac;
+        resultado.vacEf = (resultado.vacEf || 0) + montoVac;
+      }
+      resultado.neto += montoVac;
+    } else {
+      // Employee has no hours this week — create a vacation-only result
+      const vacOnlyResult = {
+        emp, empId: r.empId, nombre: emp.nombre,
+        hNorm: 0, hExtra: 0, hDoble: 0, hExtraDoble: 0,
+        descTotal: 0, fijo: 0, bruto: montoVac,
+        rebajoCC: 0, neto: montoVac,
+        netoEf: pago === 'transferencia' ? 0 : montoVac,
+        netoTr: pago === 'transferencia' ? montoVac : 0,
+        isSplit: false, sinPerfil: false, soloVacaciones: true,
+        vacaciones: [{dias: r.dias, monto: montoVac, pago,
+          periodo: r.periodoLabel || r.periodo || '', registroId: r.id, grupoId: r.grupoId}],
+        vacEf: pago === 'transferencia' ? 0 : montoVac,
+        vacTr: pago === 'transferencia' ? montoVac : 0,
+      };
+      resultados.push(vacOnlyResult);
+    }
+
+    // Mark as applied
+    r.semanaAplicada = semana;
+  });
+
+  // Persist updated registros
+  try { localStorage.setItem('planilla_vac_registros', JSON.stringify(vacRegistros)); } catch(e) {}
+}
 function aplicarRebajosAlCalculo() {
   const semana = weekLabel();
   rebajos.filter(r => r.activo).forEach(r => {
