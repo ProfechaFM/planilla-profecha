@@ -2565,21 +2565,25 @@ function vacDiasGanados(empId) {
 function vacSaldo(empId) {
   const ganados = vacDiasGanados(empId);
   const aj = vacAjustes[empId] || { canceladas: 0, disfrutadas: 0 };
-  // Ajuste inicial: días consumidos ANTES de la app — solo reduce el disponible
-  const ajusteTotal = (aj.canceladas || 0) + (aj.disfrutadas || 0);
-  // Registros nuevos en la app: contar grupoId único para no duplicar "ambas"
+  // Ajuste inicial C = días cancelados previos, D = días disfrutados previos
+  // Solo reducen el disponible, no se muestran en las columnas de registros nuevos
+  const ajusteCanceladas = aj.canceladas || 0;
+  const ajusteDisfrutadas = aj.disfrutadas || 0;
+
+  // Contar registros nuevos por grupoId único (evita doble conteo en "ambas")
   const gruposContados = new Set();
-  let regCanceladas = 0, regDisfrutadas = 0, regDias = 0;
+  let regCanceladas = 0, regDisfrutadas = 0;
   vacRegistros.filter(r => r.empId === empId).forEach(r => {
-    if (r.grupoId) {
-      if (gruposContados.has(r.grupoId)) return; // ya contado
-      gruposContados.add(r.grupoId);
-    }
-    regDias += r.dias;
+    const key = r.grupoId || r.id;
+    if (gruposContados.has(key)) return;
+    gruposContados.add(key);
+    // Solo contamos días una vez por grupo
     if (r.tipo === 'cancelada') regCanceladas += r.dias;
-    if (r.tipo === 'disfrutada') regDisfrutadas += r.dias;
+    else if (r.tipo === 'disfrutada') regDisfrutadas += r.dias;
   });
-  const disponibles = ganados - ajusteTotal - regDias;
+
+  const totalUsado = ajusteCanceladas + ajusteDisfrutadas + regCanceladas + regDisfrutadas;
+  const disponibles = ganados - totalUsado;
   return { ganados, canceladas: regCanceladas, disfrutadas: regDisfrutadas, disponibles };
 }
 
@@ -2966,21 +2970,25 @@ function aplicarVacacionesAlCalculo() {
 }
 function aplicarRebajosAlCalculo() {
   const semana = weekLabel();
+  const wk = weekKey();
+
   rebajos.filter(r => r.activo).forEach(r => {
+    // Evitar aplicar dos veces en la misma semana (si se recalcula sin guardar)
+    if (r.ultimaSemanaAplicada === wk) return;
+
     const resultado = resultados.find(res => res.empId === r.empId);
     if (!resultado || resultado.sinPerfil) return;
 
     const neto = resultado.neto;
     const pendiente = r.total - r.pagado;
-    let cuotaAplicar = Math.min(r.cuota, pendiente, neto); // por ley no puede superar el salario
+    let cuotaAplicar = Math.min(r.cuota, pendiente, neto);
 
     if (cuotaAplicar <= 0) return;
 
     resultado.neto -= cuotaAplicar;
-    if(resultado.isSplit){
-      // Para split: rebajar del netoTr (transferencia, normales)
+    if (resultado.isSplit) {
       resultado.netoTr = Math.max(0, resultado.netoTr - cuotaAplicar);
-    } else if(resultado.emp?.pago === 'transferencia'){
+    } else if (resultado.emp?.pago === 'transferencia') {
       resultado.netoTr = resultado.neto;
       resultado.netoEf = 0;
     } else {
@@ -2990,15 +2998,22 @@ function aplicarRebajosAlCalculo() {
     resultado.rebajoRebajo = (resultado.rebajoRebajo || 0) + cuotaAplicar;
 
     r.pagado += cuotaAplicar;
+    r.ultimaSemanaAplicada = wk;
     if (r.pagado >= r.total) r.activo = false;
 
-    rebajosHistorial.unshift({
-      id: Date.now().toString() + r.id,
-      semana, empId: r.empId, nombre: r.nombre,
-      concepto: r.concepto, cuotaAplicada: cuotaAplicar,
-      pendienteTras: r.total - r.pagado
-    });
+    // Evitar duplicar en historial si ya existe entrada para esta semana+rebajo
+    const yaEnHistorial = rebajosHistorial.some(h => h.rebajoId === r.id && h.semana === semana);
+    if (!yaEnHistorial) {
+      rebajosHistorial.unshift({
+        id: Date.now().toString() + r.id,
+        rebajoId: r.id,
+        semana, empId: r.empId, nombre: r.nombre,
+        concepto: r.concepto, cuotaAplicada: cuotaAplicar,
+        pendienteTras: r.total - r.pagado
+      });
+    }
   });
+
   try {
     localStorage.setItem('planilla_rebajos', JSON.stringify(rebajos));
     localStorage.setItem('planilla_rebajos_hist', JSON.stringify(rebajosHistorial));
