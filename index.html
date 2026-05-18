@@ -2469,6 +2469,9 @@ function renderInicioMovimientos(){
 
 // ── Auto-carga al conectar ───────────────────────────────────────────
 async function autoCargarAlConectar(){
+  // Sincronizar datos desde Sheets al conectar
+  await sincronizarDesdeSheets();
+
   try{
     const d=await sheetsGet('Base Datos!A2:K400');
     const rows=(d.values||[]).filter(r=>r[0]&&r[1]);
@@ -2738,6 +2741,7 @@ function actualizarAjuste(empId, tipo, val) {
   vacAjustes[empId][tipo] = parseInt(val) || 0;
   try { localStorage.setItem('planilla_vac_ajustes', JSON.stringify(vacAjustes)); } catch(e) {}
   renderVacSaldo();
+  if (accessToken) sincronizarAjustesVacSheets();
 }
 
 function iniciarRegistroVac(empId) {
@@ -2877,9 +2881,24 @@ function eliminarVac(id) {
   if (!confirm('¿Eliminar este registro de vacaciones?')) return;
   vacRegistros = vacRegistros.filter(r => r.id !== id);
   try { localStorage.setItem('planilla_vac_registros', JSON.stringify(vacRegistros)); } catch(e) {}
+  if (accessToken) reescribirVacacionesSheets();
   renderVacHistorial();
   renderVacSaldo();
   toast('Registro eliminado', 'ok');
+}
+
+async function reescribirVacacionesSheets() {
+  // Reescribe todos los registros en la hoja Vacaciones (sección 1)
+  try {
+    const rows = [['Fecha_Reg','ID_Emp','Nombre','Tipo','Dias','Monto','Pago',
+                   'Fecha_Ini','Fecha_Fin','Periodo','PeriodoLabel','Nota','GrupoId','ID_Registro']];
+    vacRegistros.forEach(r => rows.push([
+      r.fecha, r.empId, r.nombre, r.tipo, r.dias, Math.round(r.monto),
+      r.pago, r.fechaIni||'', r.fechaFin||'', r.periodo||'', r.periodoLabel||'',
+      r.nota||'', r.grupoId||'', r.id
+    ]));
+    await sheetsWrite('Vacaciones!A1', rows);
+  } catch(e) { console.warn('reescribirVac:', e.message); }
 }
 
 function exportarVacExcel() {
@@ -2991,14 +3010,27 @@ function aplicarCuotaManual(id) {
   try { localStorage.setItem('planilla_rebajos', JSON.stringify(rebajos)); } catch(e) {}
   renderRebajosActivos();
   toast(`Cuota aplicada: ${fmtMon(aAplicar)} — pendiente: ${fmtMon(r.total - r.pagado)}`, 'ok');
+  if (accessToken) actualizarRebajoSheets(r);
 }
 
 function eliminarRebajo(id) {
   if (!confirm('¿Eliminar este rebajo?')) return;
   rebajos = rebajos.filter(r => r.id !== id);
   try { localStorage.setItem('planilla_rebajos', JSON.stringify(rebajos)); } catch(e) {}
+  if (accessToken) reescribirRebajosSheets();
   renderRebajosActivos();
   toast('Rebajo eliminado', 'ok');
+}
+
+async function reescribirRebajosSheets() {
+  try {
+    const rows = [['ID_Rebajo','Fecha','ID_Emp','Nombre','Concepto','Total','Cuota','Pagado','Nota','Activo','UltimaSemana']];
+    rebajos.forEach(r => rows.push([
+      r.id, r.fecha||'', r.empId, r.nombre, r.concepto,
+      r.total, r.cuota, r.pagado, r.nota||'', r.activo ? 'TRUE' : 'FALSE', r.ultimaSemanaAplicada||''
+    ]));
+    await sheetsWrite('Rebajos!A1', rows);
+  } catch(e) { console.warn('reescribirReb:', e.message); }
 }
 
 // Aplicar rebajos automáticamente al calcular planilla
@@ -3256,8 +3288,21 @@ function eliminarInc(id) {
   if (!confirm('¿Eliminar este registro de incapacidad?')) return;
   incRegistros = incRegistros.filter(r => r.id !== id);
   try { localStorage.setItem('planilla_inc_registros', JSON.stringify(incRegistros)); } catch(e) {}
+  if (accessToken) reescribirIncapacidadesSheets();
   renderIncHistorial();
   toast('Registro eliminado', 'ok');
+}
+
+async function reescribirIncapacidadesSheets() {
+  try {
+    const rows = [['Fecha_Reg','ID_Emp','Nombre','N_Caso','Fecha_Ini','Fecha_Fin',
+                   'Dias_Pagar','Monto','Pago','Mes','Nota','ID_Registro']];
+    incRegistros.forEach(r => rows.push([
+      r.fecha, r.empId, r.nombre, r.caso||'', r.fechaIni, r.fechaFin,
+      r.dias, Math.round(r.monto), r.pago, r.mes, r.nota||'', r.id
+    ]));
+    await sheetsWrite('Incapacidades!A1', rows);
+  } catch(e) { console.warn('reescribirInc:', e.message); }
 }
 
 function exportarIncExcel() {
@@ -3726,6 +3771,197 @@ function reabrirConstanciaById(grupoId) {
   const win = window.open('', '_blank', 'width=850,height=700');
   if (!win) { toast('Permitir ventanas emergentes', 'warn'); return; }
   win.document.open(); win.document.write(html); win.document.close();
+}
+
+
+// ══════════════════════════════════════════════════════════════════
+// SINCRONIZACIÓN COMPLETA CON GOOGLE SHEETS
+// Lee vacaciones, rebajos e incapacidades al conectar
+// Escribe cada cambio inmediatamente
+// ══════════════════════════════════════════════════════════════════
+
+async function sincronizarDesdeSheets() {
+  try { await cargarVacacionesSheets(); } catch(e) { console.warn('Vac:', e.message); }
+  try { await cargarRebajosSheets(); } catch(e) { console.warn('Reb:', e.message); }
+  try { await cargarIncapacidadesSheets(); } catch(e) { console.warn('Inc:', e.message); }
+}
+
+// ── VACACIONES ─────────────────────────────────────────────────────
+async function cargarVacacionesSheets() {
+  // Registros — hoja Vacaciones
+  const d = await sheetsGet('Vacaciones!A1:N2000');
+  const rows = d.values || [];
+  const registros = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r || !r[0]) continue;
+    registros.push({
+      fecha: r[0]||'', empId: String(r[1]||''), nombre: r[2]||'',
+      tipo: r[3]||'cancelada', dias: parseInt(r[4])||0, monto: parseFloat(r[5])||0,
+      pago: r[6]||'efectivo', fechaIni: r[7]||'', fechaFin: r[8]||'',
+      periodo: r[9]||'', periodoLabel: r[10]||'', nota: r[11]||'',
+      grupoId: r[12]||'', id: r[13]||Date.now().toString(), pagadoEnSemana: false
+    });
+  }
+  vacRegistros = registros;
+
+  // Ajustes — hoja Vac_Ajustes separada
+  const da = await sheetsGet('Vac_Ajustes!A1:D200');
+  const rowsA = da.values || [];
+  const ajustes = {};
+  for (let i = 1; i < rowsA.length; i++) {
+    const r = rowsA[i];
+    if (!r || !r[0]) continue;
+    ajustes[String(r[0])] = {
+      canceladas: parseInt(r[2]) || 0,
+      disfrutadas: parseInt(r[3]) || 0
+    };
+  }
+  vacAjustes = ajustes;
+
+  try {
+    localStorage.setItem('planilla_vac_registros', JSON.stringify(vacRegistros));
+    localStorage.setItem('planilla_vac_ajustes', JSON.stringify(vacAjustes));
+  } catch(e) {}
+}
+
+async function guardarVacEnSheets(r) {
+  try {
+    await sheetsAppend('Vacaciones!A1', [[
+      r.fecha, r.empId, r.nombre, r.tipo, r.dias, Math.round(r.monto),
+      r.pago, r.fechaIni||'', r.fechaFin||'', r.periodo||'', r.periodoLabel||'',
+      r.nota||'', r.grupoId||'', r.id
+    ]]);
+  } catch(e) { console.warn('guardarVac:', e.message); }
+}
+
+async function sincronizarAjustesVacSheets() {
+  if (!accessToken) return;
+  try {
+    const rows = [['ID_Emp','Nombre','Canceladas_Previas','Disfrutadas_Previas']];
+    Object.entries(vacAjustes).forEach(([id, aj]) => {
+      const emp = empleados.find(e => e.id === id);
+      rows.push([id, emp ? emp.nombre : id, aj.canceladas || 0, aj.disfrutadas || 0]);
+    });
+    await sheetsWrite('Vac_Ajustes!A1', rows);
+  } catch(e) { console.warn('sincAjustes:', e.message); }
+}
+
+// ── REBAJOS ────────────────────────────────────────────────────────
+async function cargarRebajosSheets() {
+  // Config — hoja Rebajos
+  const d = await sheetsGet('Rebajos!A1:K500');
+  const rows = d.values || [];
+  const rbjs = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r || !r[0]) continue;
+    rbjs.push({
+      id: r[0]||Date.now().toString(), fecha: r[1]||'',
+      empId: String(r[2]||''), nombre: r[3]||'', concepto: r[4]||'',
+      total: parseFloat(r[5])||0, cuota: parseFloat(r[6])||0,
+      pagado: parseFloat(r[7])||0, nota: r[8]||'',
+      activo: r[9]!=='FALSE' && r[9]!==false && r[9]!=='0',
+      ultimaSemanaAplicada: r[10]||''
+    });
+  }
+  rebajos = rbjs;
+
+  // Historial — hoja Reb_Historial separada
+  const dh = await sheetsGet('Reb_Historial!A1:H2000');
+  const rowsH = dh.values || [];
+  const hist = [];
+  for (let i = 1; i < rowsH.length; i++) {
+    const r = rowsH[i];
+    if (!r || !r[0]) continue;
+    hist.push({
+      id: r[0]||'', semana: r[1]||'', empId: String(r[2]||''),
+      nombre: r[3]||'', concepto: r[4]||'',
+      cuotaAplicada: parseFloat(r[5])||0,
+      pendienteTras: parseFloat(r[6])||0,
+      rebajoId: r[7]||''
+    });
+  }
+  rebajosHistorial = hist;
+
+  try {
+    localStorage.setItem('planilla_rebajos', JSON.stringify(rebajos));
+    localStorage.setItem('planilla_rebajos_hist', JSON.stringify(rebajosHistorial));
+  } catch(e) {}
+}
+
+async function guardarRebajoEnSheets(r) {
+  try {
+    await sheetsAppend('Rebajos!A1', [[
+      r.id, r.fecha, r.empId, r.nombre, r.concepto,
+      r.total, r.cuota, r.pagado, r.nota||'', r.activo ? 'TRUE' : 'FALSE', r.ultimaSemanaAplicada||''
+    ]]);
+  } catch(e) { console.warn('guardarRebajo:', e.message); }
+}
+
+async function actualizarRebajoSheets(r) {
+  // Reescribe el rebajo en la fila correspondiente
+  if (!accessToken) return;
+  try {
+    const d = await sheetsGet('Rebajos!A1:A200');
+    const rows = d.values || [];
+    const rowIdx = rows.findIndex(row => row[0] === r.id);
+    if (rowIdx < 0) return;
+    const sheetRow = rowIdx + 1;
+    await sheetsWrite(`Rebajos!A${sheetRow}`, [[
+      r.id, r.fecha, r.empId, r.nombre, r.concepto,
+      r.total, r.cuota, r.pagado, r.nota||'', r.activo ? 'TRUE' : 'FALSE', r.ultimaSemanaAplicada||''
+    ]]);
+  } catch(e) { console.warn('actualizarRebajo:', e.message); }
+}
+
+async function guardarHistorialRebajoSheets(entrada) {
+  try {
+    await sheetsAppend('Reb_Historial!A1', [[
+      entrada.id, entrada.semana, entrada.empId, entrada.nombre,
+      entrada.concepto, entrada.cuotaAplicada, entrada.pendienteTras, entrada.rebajoId
+    ]]);
+  } catch(e) { console.warn('guardarHist:', e.message); }
+}
+
+// ── INCAPACIDADES ──────────────────────────────────────────────────
+async function cargarIncapacidadesSheets() {
+  const d = await sheetsGet('Incapacidades!A1:L500');
+  const rows = d.values || [];
+  if (!rows.length) return;
+
+  const incs = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r || !r[0]) continue;
+    incs.push({
+      fecha:      r[0]  || '',
+      empId:      String(r[1] || ''),
+      nombre:     r[2]  || '',
+      caso:       r[3]  || '',
+      fechaIni:   r[4]  || '',
+      fechaFin:   r[5]  || '',
+      dias:       parseInt(r[6]) || 0,
+      monto:      parseFloat(r[7]) || 0,
+      pago:       r[8]  || 'efectivo',
+      mes:        r[9]  || '',
+      nota:       r[10] || '',
+      id:         r[11] || Date.now().toString(),
+      pagadoEnSemana: false
+    });
+  }
+  incRegistros = incs;
+
+  try { localStorage.setItem('planilla_inc_registros', JSON.stringify(incRegistros)); } catch(e) {}
+}
+
+async function guardarIncEnSheets(r) {
+  try {
+    await sheetsAppend('Incapacidades!A1', [[
+      r.fecha, r.empId, r.nombre, r.caso||'', r.fechaIni, r.fechaFin,
+      r.dias, Math.round(r.monto), r.pago, r.mes, r.nota||'', r.id
+    ]]);
+  } catch(e) { console.warn('guardarInc:', e.message); }
 }
 
 // Init
