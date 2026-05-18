@@ -2905,20 +2905,23 @@ function eliminarRebajo(id) {
 // Busca registros de vacaciones "canceladas" sin semana aplicada aún
 // y los suma al resultado del empleado para esa semana
 function aplicarVacacionesAlCalculo() {
-  const semana = weekLabel();
+  // Busca registros de vacaciones canceladas marcadas para pagar esta semana
+  // La asociación se hace al registrar: vacSemanaCalculo = weekKey() actual
+  // Si no tiene semana asignada pero fue registrada antes de hoy, también se incluye
 
-  // Get all unpaid cancelada vacation records (type cancelada or ambas)
-  // that haven't been applied to a week yet
+  const wk = weekKey(); // "2026-05-18" formato
+  const gruposAplicados = new Set();
+
   const pendientes = vacRegistros.filter(r =>
-    r.tipo === 'cancelada' && !r.semanaAplicada && r.monto > 0
+    r.tipo === 'cancelada' &&
+    r.monto > 0 &&
+    (r.vacSemanaCalculo === wk || (!r.vacSemanaCalculo && !r.pagadoEnSemana))
   );
 
   if (!pendientes.length) return;
 
-  // Deduplicate by grupoId — only apply once per vacation event
-  const gruposAplicados = new Set();
-
   pendientes.forEach(r => {
+    // Deduplicar por grupoId (ambas = 1 cancelada + 1 disfrutada, mismos días)
     if (r.grupoId && gruposAplicados.has(r.grupoId)) return;
     if (r.grupoId) gruposAplicados.add(r.grupoId);
 
@@ -2926,18 +2929,17 @@ function aplicarVacacionesAlCalculo() {
     const emp = empleados.find(e => e.id === r.empId);
     if (!emp) return;
 
-    // Vacation pay: no CCSS, no descanso, no rebajos
     const montoVac = r.monto;
     const pago = r.pago || emp.pago || 'efectivo';
+    const vacItem = {
+      dias: r.dias, monto: montoVac, pago,
+      periodo: r.periodoLabel || r.periodo || '',
+      registroId: r.id, grupoId: r.grupoId
+    };
 
     if (resultado) {
-      // Employee has hours this week — add vacation to existing result
       if (!resultado.vacaciones) resultado.vacaciones = [];
-      resultado.vacaciones.push({
-        dias: r.dias, monto: montoVac, pago,
-        periodo: r.periodoLabel || r.periodo || '',
-        registroId: r.id, grupoId: r.grupoId
-      });
+      resultado.vacaciones.push(vacItem);
       if (pago === 'transferencia') {
         resultado.netoTr += montoVac;
         resultado.vacTr = (resultado.vacTr || 0) + montoVac;
@@ -2947,8 +2949,7 @@ function aplicarVacacionesAlCalculo() {
       }
       resultado.neto += montoVac;
     } else {
-      // Employee has no hours this week — create a vacation-only result
-      const vacOnlyResult = {
+      resultados.push({
         emp, empId: r.empId, nombre: emp.nombre,
         hNorm: 0, hExtra: 0, hDoble: 0, hExtraDoble: 0,
         descTotal: 0, fijo: 0, bruto: montoVac,
@@ -2956,20 +2957,12 @@ function aplicarVacacionesAlCalculo() {
         netoEf: pago === 'transferencia' ? 0 : montoVac,
         netoTr: pago === 'transferencia' ? montoVac : 0,
         isSplit: false, sinPerfil: false, soloVacaciones: true,
-        vacaciones: [{dias: r.dias, monto: montoVac, pago,
-          periodo: r.periodoLabel || r.periodo || '', registroId: r.id, grupoId: r.grupoId}],
+        vacaciones: [vacItem],
         vacEf: pago === 'transferencia' ? 0 : montoVac,
         vacTr: pago === 'transferencia' ? montoVac : 0,
-      };
-      resultados.push(vacOnlyResult);
+      });
     }
-
-    // Mark as applied
-    r.semanaAplicada = semana;
   });
-
-  // Persist updated registros
-  try { localStorage.setItem('planilla_vac_registros', JSON.stringify(vacRegistros)); } catch(e) {}
 }
 function aplicarRebajosAlCalculo() {
   const semana = weekLabel();
@@ -3372,7 +3365,12 @@ for(let i=y;i>=y-4;i--){const o=document.createElement('option');o.value=i;o.tex
 document.getElementById('hist-mes').value=new Date().getMonth()+1;
 try{const sc=localStorage.getItem('planilla_cfg');if(sc)cfg=JSON.parse(sc);}catch(e){}
 try{const sf=localStorage.getItem('planilla_fechas_ingreso');if(sf)FECHAS_INGRESO=JSON.parse(sf);}catch(e){}
-try{const sv=localStorage.getItem('planilla_vac_registros');if(sv)vacRegistros=JSON.parse(sv);}catch(e){}
+try{const sv=localStorage.getItem('planilla_vac_registros');if(sv){vacRegistros=JSON.parse(sv);
+  // Migrate: remove old semanaAplicada marks so vacations appear again
+  let migrated=false;
+  vacRegistros.forEach(r=>{if(r.semanaAplicada){delete r.semanaAplicada;migrated=true;}});
+  if(migrated)localStorage.setItem('planilla_vac_registros',JSON.stringify(vacRegistros));
+}}catch(e){}
 try{const sa=localStorage.getItem('planilla_vac_ajustes');if(sa)vacAjustes=JSON.parse(sa);}catch(e){}
 try{const sr=localStorage.getItem('planilla_rebajos');if(sr)rebajos=JSON.parse(sr);}catch(e){}
 try{const srh=localStorage.getItem('planilla_rebajos_hist');if(srh)rebajosHistorial=JSON.parse(srh);}catch(e){}
