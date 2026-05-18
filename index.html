@@ -2849,11 +2849,7 @@ function registrarVacaciones() {
   document.getElementById('vac-preview').style.display = 'none';
 }
 
-async function guardarVacEnSheets(r) {
-  try {
-    await sheetsAppend('Vacaciones!A1', [[r.fecha, r.empId, r.nombre, r.tipo, r.dias, Math.round(r.monto), r.pago, r.nota, r.id]]);
-  } catch(e) { console.warn('Error guardando vacaciones en Sheets:', e.message); }
-}
+// guardarVacEnSheets moved to sync module
 
 function renderVacHistorial() {
   const filtroEmp = document.getElementById('vac-hist-emp')?.value || '';
@@ -2994,11 +2990,7 @@ function guardarRebajo() {
   ['reb-total','reb-cuota'].forEach(id => { const el = document.getElementById(id); if(el) el.value = 0; });
 }
 
-async function guardarRebajoEnSheets(r) {
-  try {
-    await sheetsAppend('Rebajos!A1', [[r.fecha, r.empId, r.nombre, r.concepto, r.total, r.cuota, r.nota, r.id]]);
-  } catch(e) { console.warn('Error guardando rebajo en Sheets:', e.message); }
-}
+// guardarRebajoEnSheets moved to sync module
 
 function aplicarCuotaManual(id) {
   const r = rebajos.find(x => x.id === id);
@@ -3258,11 +3250,7 @@ function registrarIncapacidad() {
   document.getElementById('inc-dias-display').textContent = '— días';
 }
 
-async function guardarIncEnSheets(r) {
-  try {
-    await sheetsAppend('Incapacidades!A1', [[r.fecha, r.empId, r.nombre, r.caso, r.fechaIni, r.fechaFin, r.dias, Math.round(r.monto), r.pago, r.mes, r.nota, r.id]]);
-  } catch(e) { console.warn('Error guardando incapacidad en Sheets:', e.message); }
-}
+// guardarIncEnSheets moved to sync module
 
 function renderIncHistorial() {
   const filtroEmp = document.getElementById('inc-hist-emp')?.value || '';
@@ -3502,147 +3490,9 @@ function calcularDiasHabiles(fechaIniStr, fechaFinStr) {
   return count;
 }
 
-// Override actualizarPreviewVac with improved version
-function actualizarPreviewVac() {
-  const empId = document.getElementById('vac-emp')?.value;
-  const tipo = document.getElementById('vac-tipo')?.value;
-  const pagoWrap = document.getElementById('vac-pago-wrap');
-  const preview = document.getElementById('vac-preview');
-  const periodoSel = document.getElementById('vac-periodo');
-  const diasDisplay = document.getElementById('vac-dias-display');
-  const diasInput = document.getElementById('vac-dias');
-  const fechaIni = document.getElementById('vac-fecha-ini')?.value || '';
-  const fechaFin = document.getElementById('vac-fecha-fin')?.value || '';
-
-  // Show/hide pago based on tipo
-  if (pagoWrap) pagoWrap.style.display = (tipo === 'disfrutada') ? 'none' : '';
-
-  // Populate períodos when employee changes
-  if (empId && periodoSel) {
-    if (periodoSel.children.length <= 1 || periodoSel.dataset.empId !== empId) {
-      poblarVacPeriodos(empId);
-      periodoSel.dataset.empId = empId;
-    }
-  }
-
-  // Calculate business days automatically
-  const dias = calcularDiasHabiles(fechaIni, fechaFin);
-  if (diasInput) diasInput.value = dias;
-  if (diasDisplay) {
-    diasDisplay.textContent = dias > 0 ? `${dias} día${dias !== 1 ? 's' : ''} hábil${dias !== 1 ? 'es' : ''}` : '— días';
-    diasDisplay.style.color = dias > 0 ? 'var(--accent)' : 'var(--text3)';
-  }
-
-  if (!empId || dias === 0 || !preview) { if (preview) preview.style.display = 'none'; return; }
-  const emp = empleados.find(e => e.id === empId);
-  if (!emp) return;
-
-  const horaBase = parseFloat(emp.horaBase) || 0;
-  const monto = horaBase * 8 * dias;
-  const s = vacSaldo(empId);
-  const pago = document.getElementById('vac-pago')?.value || 'efectivo';
-  const periodo = periodoSel?.options[periodoSel.selectedIndex]?.text || '—';
-
-  const tipoLabel = tipo === 'ambas' ? '🌴💰 Disfrutadas y canceladas' :
-                    tipo === 'disfrutada' ? '🌴 Solo disfrutadas (descanso)' :
-                    '💰 Solo canceladas (pago)';
-
-  // Saldo: 'ambas' descuenta solo 1 vez (mismos días físicos)
-  const diasSaldo = dias;
-
-  preview.style.display = '';
-  preview.innerHTML = `
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem">
-      <div><div style="font-size:11px;color:var(--text3)">Empleado</div><div style="font-weight:600">${emp.nombre}</div></div>
-      <div><div style="font-size:11px;color:var(--text3)">Período</div><div style="font-weight:600">${periodo}</div></div>
-      <div><div style="font-size:11px;color:var(--text3)">Tipo</div><div style="font-weight:600">${tipoLabel}</div></div>
-      <div><div style="font-size:11px;color:var(--text3)">Fechas</div><div style="font-weight:600">${fechaIni} al ${fechaFin}</div></div>
-      <div><div style="font-size:11px;color:var(--text3)">Días hábiles</div><div style="font-weight:700;color:var(--accent)">${dias}</div></div>
-      <div><div style="font-size:11px;color:var(--text3)">Monto (sin CCSS)</div><div style="font-weight:700;color:var(--accent);font-family:'DM Mono',monospace">${tipo === 'disfrutada' ? '—' : fmtMon(monto)}</div></div>
-      ${tipo !== 'disfrutada' ? `<div><div style="font-size:11px;color:var(--text3)">Forma de pago</div><div style="font-weight:600">${pago === 'transferencia' ? 'Transferencia' : 'Efectivo'}</div></div>` : '<div></div>'}
-      <div style="grid-column:1/-1;border-top:1px solid var(--border);padding-top:.5rem;font-size:12px;color:${s.disponibles >= diasSaldo ? 'var(--accent)' : 'var(--danger)'}">
-        Disponibles: <strong>${s.disponibles} días</strong> → usará: <strong>${diasSaldo}</strong> → quedarán: <strong>${s.disponibles - diasSaldo}</strong>
-        ${s.disponibles < diasSaldo ? ' ⚠ Saldo insuficiente' : ' ✓'}
-      </div>
-    </div>`;
-}
-
 // Override registrarVacaciones with improved version
-function registrarVacaciones() {
-  const empId = document.getElementById('vac-emp')?.value;
-  const tipo = document.getElementById('vac-tipo')?.value;
-  const dias = parseInt(document.getElementById('vac-dias')?.value) || 0;
-  const pago = document.getElementById('vac-pago')?.value || 'efectivo';
-  const fechaIni = document.getElementById('vac-fecha-ini')?.value || '';
-  const fechaFin = document.getElementById('vac-fecha-fin')?.value || '';
-  const nota = document.getElementById('vac-nota-reg')?.value || '';
-  const periodoSel = document.getElementById('vac-periodo');
-  const periodo = periodoSel?.value || '';
-  const periodoLabel = periodoSel?.options[periodoSel.selectedIndex]?.text || '';
+// registrarVacaciones moved to v2
 
-  if (!empId) { toast('Seleccioná un empleado', 'warn'); return; }
-  if (!dias || dias < 1) { toast('Ingresá la cantidad de días', 'warn'); return; }
-  if (!fechaIni) { toast('Ingresá la fecha de inicio', 'warn'); return; }
-  if (!fechaFin) { toast('Ingresá la fecha de fin', 'warn'); return; }
-
-  const emp = empleados.find(e => e.id === empId);
-  if (!emp) return;
-  const monto = (parseFloat(emp.horaBase) || 0) * 8 * dias;
-  const s = vacSaldo(empId);
-  const diasUsados = dias; // 'ambas' = mismos días físicos, descuenta 1 sola vez
-
-  if (s.disponibles < diasUsados) {
-    if (!confirm(`⚠ El empleado solo tiene ${s.disponibles} días disponibles (se usarán ${diasUsados}). ¿Registrar de todas formas?`)) return;
-  }
-
-  const id = Date.now().toString();
-  const fechaHoy = new Date().toISOString().split('T')[0];
-
-  // Create records based on tipo
-  const registros = [];
-  if (tipo === 'disfrutada' || tipo === 'ambas') {
-    registros.push({
-      id: id + '_d', empId, nombre: emp.nombre,
-      tipo: 'disfrutada', dias, monto: 0,
-      pago: 'disfrutada', fecha: fechaHoy,
-      fechaIni, fechaFin, periodo, periodoLabel, nota,
-      grupoId: id
-    });
-  }
-  if (tipo === 'cancelada' || tipo === 'ambas') {
-    registros.push({
-      id: id + '_c', empId, nombre: emp.nombre,
-      tipo: 'cancelada', dias, monto,
-      pago, fecha: fechaHoy,
-      fechaIni, fechaFin, periodo, periodoLabel, nota,
-      grupoId: id
-    });
-  }
-
-  registros.forEach(r => {
-    vacRegistros.unshift(r);
-    if (accessToken) guardarVacEnSheets(r);
-  });
-
-  try { localStorage.setItem('planilla_vac_registros', JSON.stringify(vacRegistros)); } catch(e) {}
-  toast('Vacaciones registradas correctamente', 'ok');
-
-  // Generate constancia
-  generarConstanciaVacaciones({
-    emp, dias, fechaIni, fechaFin, periodo: periodoLabel,
-    tipo, pago, monto, fechaDoc: fechaHoy, grupoId: id
-  });
-
-  renderVacSaldo();
-  // Clear form
-  document.getElementById('vac-dias').value = 1;
-  document.getElementById('vac-nota-reg').value = '';
-  document.getElementById('vac-fecha-ini').value = '';
-  document.getElementById('vac-fecha-fin').value = '';
-  document.getElementById('vac-preview').style.display = 'none';
-}
-
-// Generate and show printable constancia
 function generarConstanciaVacaciones(data) {
   const { emp, dias, fechaIni, fechaFin, periodo, tipo, pago, monto, fechaDoc, grupoId } = data;
   const fechaDocFmt = new Date(fechaDoc + 'T12:00:00').toLocaleDateString('es-CR', {day:'2-digit',month:'long',year:'numeric'});
