@@ -1023,6 +1023,12 @@ tr:hover td{background:var(--bg)}
 // ── Utilities (defined first — used throughout) ──────────────────
 function debounce(fn,ms=400){let tid;return(...args)=>{clearTimeout(tid);tid=setTimeout(()=>fn(...args),ms);};}
 const MESES_ES=['ene','feb','mar','abr','may','jun','jul','ago','set','oct','nov','dic'];
+// Alias para tolerancia: es-CR genera 'sept', el array tiene 'set'
+function mesIndex(word){
+  const w=word.toLowerCase().replace('.','').substring(0,3);
+  if(w==='sep')return 8; // setiembre
+  return MESES_ES.indexOf(w);
+}
 const _recalcDebounced=debounce(()=>{if(resultados.length)recalcularSilencioso();},500);
 
 const CLIENT_ID='208106774559-e48u19274onhe0fsc47kqh9ki4q5kosg.apps.googleusercontent.com';
@@ -1096,6 +1102,17 @@ function nav(id,el){
 document.querySelectorAll('[data-nav]').forEach(function(el) {
   el.addEventListener('click', function() { nav(this.dataset.nav, this); });
 });
+
+// Poblar selectores de año para Historial y Aguinaldo
+(function poblarAnios(){
+  const anioActual = new Date().getFullYear();
+  const anios = [];
+  for(let a = anioActual; a >= anioActual - 5; a--) anios.push(a);
+  const histSel = document.getElementById('hist-anio');
+  const agSel   = document.getElementById('ag-anio');
+  if(histSel) histSel.innerHTML = anios.map(a=>`<option value="${a}"${a===anioActual?' selected':''}>${a}</option>`).join('');
+  if(agSel)   agSel.innerHTML   = anios.map(a=>`<option value="${a}"${a===anioActual?' selected':''}>${a}</option>`).join('');
+})();
 
 function updateHeader(){
   document.getElementById('week-label').textContent=weekLabel();
@@ -2578,7 +2595,7 @@ async function guardarEmpleadosSheets(silent=false){
 function parsearEtiquetaSemana(etiqueta){
   const m=etiqueta.match(/(\d{1,2})\s+([a-záéíóú.]+)\s+(\d{4})/i);
   if(!m)return null;
-  const mes0=MESES_ES.indexOf(m[2].toLowerCase().replace('.','').substring(0,3));
+  const mes0=mesIndex(m[2]);
   if(mes0===-1)return null;
   return{mes0,anio:parseInt(m[3])};
 }
@@ -2603,7 +2620,7 @@ function agIdsSeleccionados(){return[...document.querySelectorAll('.ag-check:che
 function agParsearFechaEtiqueta(etiqueta){
   const m=etiqueta.match(/(\d{1,2})\s+([a-záéíóú.]+)\s+(\d{4})/i);
   if(!m)return null;
-  const mes0=MESES_ES.indexOf(m[2].toLowerCase().replace('.','').substring(0,3));
+  const mes0=mesIndex(m[2]);
   if(mes0===-1)return null;
   return new Date(parseInt(m[3]),mes0,parseInt(m[1]));
 }
