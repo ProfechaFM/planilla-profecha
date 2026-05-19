@@ -549,6 +549,9 @@ tr:hover td{background:var(--bg)}
 
   <!-- TAB: Activos -->
   <div id="reb-tab-activos-content">
+    <div id="reb-sin-conexion" style="display:none" class="alert alert-warn" style="margin-bottom:.75rem">
+      ⚠ <strong>Sin conexión a Sheets.</strong> Mostrando datos del caché local de esta PC. Conectate para ver los rebajos actualizados desde cualquier dispositivo.
+    </div>
     <div class="card">
       <div class="tab-wrap">
         <table><thead><tr>
@@ -1023,12 +1026,6 @@ tr:hover td{background:var(--bg)}
 // ── Utilities (defined first — used throughout) ──────────────────
 function debounce(fn,ms=400){let tid;return(...args)=>{clearTimeout(tid);tid=setTimeout(()=>fn(...args),ms);};}
 const MESES_ES=['ene','feb','mar','abr','may','jun','jul','ago','set','oct','nov','dic'];
-// Alias para tolerancia: es-CR genera 'sept', el array tiene 'set'
-function mesIndex(word){
-  const w=word.toLowerCase().replace('.','').substring(0,3);
-  if(w==='sep')return 8; // setiembre
-  return MESES_ES.indexOf(w);
-}
 const _recalcDebounced=debounce(()=>{if(resultados.length)recalcularSilencioso();},500);
 
 const CLIENT_ID='208106774559-e48u19274onhe0fsc47kqh9ki4q5kosg.apps.googleusercontent.com';
@@ -1048,10 +1045,44 @@ let resultados=[];
 let horarioPendiente=false;
 let singlePunches={};
 let currentWeekStart=getWeekStart(new Date());
-let cfg={ccss:10.83,extra:1.5,doble:2.0,extraDoble:3.5,descH:8,descD:48,extrasAcumulativas:false};
+let cfg={ccss:10.83,extra:1.5,doble:2.0,extraDoble:3.5,descH:8,descD:48,extrasAcumulativas:true};
 let editingEmp=null;
 
+// ── Restaurar estado desde localStorage al abrir ─────────────────────
+(function restaurarEstadoLocal(){
+  try {
+    const cfgSaved = localStorage.getItem('planilla_cfg');
+    if (cfgSaved) {
+      const c = JSON.parse(cfgSaved);
+      cfg.ccss            = c.ccss            ?? cfg.ccss;
+      cfg.extra           = c.extra           ?? cfg.extra;
+      cfg.doble           = c.doble           ?? cfg.doble;
+      cfg.extraDoble      = c.extraDoble      ?? cfg.extraDoble;
+      cfg.descH           = c.descH           ?? cfg.descH;
+      cfg.descD           = c.descD           ?? cfg.descD;
+      cfg.extrasAcumulativas = c.extrasAcumulativas ?? cfg.extrasAcumulativas;
+    }
+    const rebSaved  = localStorage.getItem('planilla_rebajos');
+    if (rebSaved)  rebajos = JSON.parse(rebSaved);
+    const rebHSaved = localStorage.getItem('planilla_rebajos_hist');
+    if (rebHSaved) rebajosHistorial = JSON.parse(rebHSaved);
+    const vacSaved  = localStorage.getItem('planilla_vac_registros');
+    if (vacSaved)  vacRegistros = JSON.parse(vacSaved);
+    const vacASaved = localStorage.getItem('planilla_vac_ajustes');
+    if (vacASaved) vacAjustes = JSON.parse(vacASaved);
+    const incSaved  = localStorage.getItem('planilla_inc_registros');
+    if (incSaved)  incRegistros = JSON.parse(incSaved);
+    const empSaved  = localStorage.getItem('planilla_empleados_cache');
+    if (empSaved)  empleados = JSON.parse(empSaved);
+    const fiSaved   = localStorage.getItem('planilla_fechas_ingreso');
+    if (fiSaved)   FECHAS_INGRESO = JSON.parse(fiSaved);
+    const movSaved  = localStorage.getItem('planilla_movimientos');
+    if (movSaved)  movimientos = JSON.parse(movSaved);
+  } catch(e) { console.warn('Error restaurando estado local:', e.message); }
+})();
+
 document.getElementById('current-url').textContent=window.location.origin;
+setTimeout(initConfigUI, 0);
 
 function getWeekStart(d){const c=new Date(d);c.setHours(0,0,0,0);const day=c.getDay();c.setDate(c.getDate()-(day===0?6:day-1));return c;}
 function addDays(d,n){const r=new Date(d);r.setDate(r.getDate()+n);return r;}
@@ -1094,25 +1125,15 @@ function nav(id,el){
   if(id==='aguinaldo')agRenderLista();
   if(id==='inicio')actualizarInicio();
   if(id==='vacaciones'){poblarVacEmpSelect();renderVacSaldo();}
-  if(id==='rebajos')renderRebajosActivos();
+  if(id==='rebajos'){renderRebajosActivos();mostrarAvisoSinConexion('rebajos');}
   if(id==='incapacidades'){poblarIncEmpSelect();actualizarPreviewInc();}
+  if(id==='config')initConfigUI();
 }
 
 // Wire nav items — must be after nav() is defined
 document.querySelectorAll('[data-nav]').forEach(function(el) {
   el.addEventListener('click', function() { nav(this.dataset.nav, this); });
 });
-
-// Poblar selectores de año para Historial y Aguinaldo
-(function poblarAnios(){
-  const anioActual = new Date().getFullYear();
-  const anios = [];
-  for(let a = anioActual; a >= anioActual - 5; a--) anios.push(a);
-  const histSel = document.getElementById('hist-anio');
-  const agSel   = document.getElementById('ag-anio');
-  if(histSel) histSel.innerHTML = anios.map(a=>`<option value="${a}"${a===anioActual?' selected':''}>${a}</option>`).join('');
-  if(agSel)   agSel.innerHTML   = anios.map(a=>`<option value="${a}"${a===anioActual?' selected':''}>${a}</option>`).join('');
-})();
 
 function updateHeader(){
   document.getElementById('week-label').textContent=weekLabel();
@@ -1872,6 +1893,7 @@ function setConnected(ok){
   ['conn-dot','cfg-dot'].forEach(id=>{const d=document.getElementById(id);if(d)d.className='dot '+(ok?'ok':'err');});
   document.getElementById('conn-txt').textContent=ok?'Sheets conectado':'Error';
   document.getElementById('cfg-status').textContent=ok?'Conectado a Google Sheets':'Error de conexión';
+  if(ok){const el=document.getElementById('reb-sin-conexion');if(el)el.style.display='none';}
 }
 
 async function inicializarSheets(){
@@ -2365,6 +2387,20 @@ function setExtrasMode(mode){
   document.getElementById('extras-acum').checked=(mode==='acum');
 }
 
+function initConfigUI(){
+  const set=(id,val)=>{const el=document.getElementById(id);if(el)el.value=val;};
+  set('cfg-ccss',    cfg.ccss);
+  set('cfg-extra',   cfg.extra);
+  set('cfg-doble',   cfg.doble);
+  set('cfg-extradob',cfg.extraDoble);
+  set('cfg-desc-h',  cfg.descH);
+  set('cfg-desc-d',  cfg.descD);
+  const diaEl=document.getElementById('extras-dia');
+  const acumEl=document.getElementById('extras-acum');
+  if(diaEl)  diaEl.checked  = !cfg.extrasAcumulativas;
+  if(acumEl) acumEl.checked =  cfg.extrasAcumulativas;
+}
+
 function saveConfig(){
   cfg.ccss=parseFloat(document.getElementById('cfg-ccss').value)||10.83;
   cfg.extra=parseFloat(document.getElementById('cfg-extra').value)||1.5;
@@ -2595,7 +2631,7 @@ async function guardarEmpleadosSheets(silent=false){
 function parsearEtiquetaSemana(etiqueta){
   const m=etiqueta.match(/(\d{1,2})\s+([a-záéíóú.]+)\s+(\d{4})/i);
   if(!m)return null;
-  const mes0=mesIndex(m[2]);
+  const mes0=MESES_ES.indexOf(m[2].toLowerCase().replace('.','').substring(0,3));
   if(mes0===-1)return null;
   return{mes0,anio:parseInt(m[3])};
 }
@@ -2620,7 +2656,7 @@ function agIdsSeleccionados(){return[...document.querySelectorAll('.ag-check:che
 function agParsearFechaEtiqueta(etiqueta){
   const m=etiqueta.match(/(\d{1,2})\s+([a-záéíóú.]+)\s+(\d{4})/i);
   if(!m)return null;
-  const mes0=mesIndex(m[2]);
+  const mes0=MESES_ES.indexOf(m[2].toLowerCase().replace('.','').substring(0,3));
   if(mes0===-1)return null;
   return new Date(parseInt(m[3]),mes0,parseInt(m[1]));
 }
@@ -3081,6 +3117,13 @@ function rebajoTab(tab) {
   if (tab === 'activos') renderRebajosActivos();
   if (tab === 'nuevo') poblarRebEmpSelect();
   if (tab === 'historial') renderRebajosHistorial();
+}
+
+function mostrarAvisoSinConexion(modulo) {
+  if (modulo === 'rebajos') {
+    const el = document.getElementById('reb-sin-conexion');
+    if (el) el.style.display = accessToken ? 'none' : '';
+  }
 }
 
 function renderRebajosActivos() {
