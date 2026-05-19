@@ -442,8 +442,10 @@ tr:hover td{background:var(--bg)}
           <th style="text-align:right">Ganados</th>
           <th style="text-align:right">Canceladas<br><span style="font-weight:400;font-size:10px">(pagadas)</span></th>
           <th style="text-align:right">Disfrutadas<br><span style="font-weight:400;font-size:10px">(descanso)</span></th>
-          <th style="text-align:right">Ajuste inicial</th>
-          <th style="text-align:right;color:var(--accent)">Disponibles</th>
+          <th style="text-align:right">Ajuste C<br><span style="font-weight:400;font-size:10px">(previas pago)</span></th>
+          <th style="text-align:right">Ajuste D<br><span style="font-weight:400;font-size:10px">(previas desc.)</span></th>
+          <th style="text-align:right;color:var(--accent)">Disp. C</th>
+          <th style="text-align:right;color:var(--accent)">Disp. D</th>
           <th>Acciones</th>
         </tr></thead>
         <tbody id="vac-saldo-tbody"></tbody></table>
@@ -2666,26 +2668,23 @@ function vacDiasGanados(empId) {
 function vacSaldo(empId) {
   const ganados = vacDiasGanados(empId);
   const aj = vacAjustes[empId] || { canceladas: 0, disfrutadas: 0 };
-  // Ajuste inicial C = días cancelados previos, D = días disfrutados previos
-  // Solo reducen el disponible, no se muestran en las columnas de registros nuevos
-  const ajusteCanceladas = aj.canceladas || 0;
-  const ajusteDisfrutadas = aj.disfrutadas || 0;
+  const ajC = aj.canceladas || 0;
+  const ajD = aj.disfrutadas || 0;
 
-  // Contar registros nuevos por grupoId único (evita doble conteo en "ambas")
+  // Contar registros nuevos por grupoId único
   const gruposContados = new Set();
   let regCanceladas = 0, regDisfrutadas = 0;
   vacRegistros.filter(r => r.empId === empId).forEach(r => {
     const key = r.grupoId || r.id;
     if (gruposContados.has(key)) return;
     gruposContados.add(key);
-    // Solo contamos días una vez por grupo
     if (r.tipo === 'cancelada') regCanceladas += r.dias;
     else if (r.tipo === 'disfrutada') regDisfrutadas += r.dias;
   });
 
-  const totalUsado = ajusteCanceladas + ajusteDisfrutadas + regCanceladas + regDisfrutadas;
-  const disponibles = ganados - totalUsado;
-  return { ganados, canceladas: regCanceladas, disfrutadas: regDisfrutadas, disponibles };
+  const disponiblesC = ganados - ajC - regCanceladas;
+  const disponiblesD = ganados - ajD - regDisfrutadas;
+  return { ganados, canceladas: regCanceladas, disfrutadas: regDisfrutadas, disponiblesC, disponiblesD };
 }
 
 function vacTab(tab) {
@@ -2718,16 +2717,19 @@ function renderVacSaldo() {
       <td style="text-align:right;font-family:'DM Mono',monospace">${s.canceladas}</td>
       <td style="text-align:right;font-family:'DM Mono',monospace">${s.disfrutadas}</td>
       <td style="text-align:right">
-        <div style="display:flex;gap:4px;justify-content:flex-end;align-items:center">
-          <input type="number" value="${aj.canceladas}" min="0" style="width:44px;font-size:11px;padding:2px 4px;border:1px solid var(--border2);border-radius:4px;text-align:center"
-            onchange="actualizarAjuste('${e.id}','canceladas',this.value)" title="Canceladas previas">
-          <span style="font-size:10px;color:var(--text3)">C</span>
-          <input type="number" value="${aj.disfrutadas}" min="0" style="width:44px;font-size:11px;padding:2px 4px;border:1px solid var(--border2);border-radius:4px;text-align:center"
-            onchange="actualizarAjuste('${e.id}','disfrutadas',this.value)" title="Disfrutadas previas">
-          <span style="font-size:10px;color:var(--text3)">D</span>
-        </div>
+        <input type="number" value="${aj.canceladas||0}" min="0"
+          style="width:50px;font-size:11px;padding:3px 5px;border:1px solid var(--border2);border-radius:4px;text-align:center"
+          onchange="actualizarAjuste('${e.id}','canceladas',this.value)"
+          title="Canceladas antes de la app">
       </td>
-      <td style="text-align:right;font-weight:700;font-family:'DM Mono',monospace;${dispColor}">${s.disponibles}</td>
+      <td style="text-align:right">
+        <input type="number" value="${aj.disfrutadas||0}" min="0"
+          style="width:50px;font-size:11px;padding:3px 5px;border:1px solid var(--border2);border-radius:4px;text-align:center"
+          onchange="actualizarAjuste('${e.id}','disfrutadas',this.value)"
+          title="Disfrutadas antes de la app">
+      </td>
+      <td style="text-align:right;font-weight:700;font-family:'DM Mono',monospace;color:${s.disponiblesC<0?'var(--danger)':s.disponiblesC===0?'var(--text3)':'var(--accent)'}">${s.disponiblesC}</td>
+      <td style="text-align:right;font-weight:700;font-family:'DM Mono',monospace;color:${s.disponiblesD<0?'var(--danger)':s.disponiblesD===0?'var(--text3)':'var(--accent)'}">${s.disponiblesD}</td>
       <td>
         <button class="btn btn-s" style="font-size:10px;padding:3px 7px"
           onclick="iniciarRegistroVac('${e.id}')">+ Registrar</button>
@@ -2776,32 +2778,63 @@ function poblarVacHistEmp() {
 
 function actualizarPreviewVac() {
   const empId = document.getElementById('vac-emp')?.value;
-  const diasInput = document.getElementById('vac-dias');
-  const fechaIniRaw = document.getElementById('vac-fecha-ini')?.value || '';
-  const fechaFinRaw = document.getElementById('vac-fecha-fin')?.value || '';
-  const dias = calcularDiasHabiles(fechaIniRaw, fechaFinRaw);
   const tipo = document.getElementById('vac-tipo')?.value;
   const pagoWrap = document.getElementById('vac-pago-wrap');
   const preview = document.getElementById('vac-preview');
-  if (pagoWrap) pagoWrap.style.display = tipo === 'cancelada' ? '' : 'none';
-  if (!empId || !dias || !preview) { if (preview) preview.style.display = 'none'; return; }
+  const periodoSel = document.getElementById('vac-periodo');
+  const diasDisplay = document.getElementById('vac-dias-display');
+  const diasInput = document.getElementById('vac-dias');
+  const fechaIni = document.getElementById('vac-fecha-ini')?.value || '';
+  const fechaFin = document.getElementById('vac-fecha-fin')?.value || '';
+
+  // Show/hide pago based on tipo
+  if (pagoWrap) pagoWrap.style.display = tipo === 'disfrutada' ? 'none' : '';
+
+  // Populate períodos when employee changes
+  if (empId && periodoSel) {
+    if (periodoSel.children.length <= 1 || periodoSel.dataset.empId !== empId) {
+      poblarVacPeriodos(empId);
+      periodoSel.dataset.empId = empId;
+    }
+  }
+
+  // Calculate business days automatically
+  const dias = calcularDiasHabiles(fechaIni, fechaFin);
+  if (diasInput) diasInput.value = dias;
+  if (diasDisplay) {
+    diasDisplay.textContent = dias > 0 ? `${dias} día${dias !== 1 ? 's' : ''} hábil${dias !== 1 ? 'es' : ''}` : '— días';
+    diasDisplay.style.color = dias > 0 ? 'var(--accent)' : 'var(--text3)';
+  }
+
+  if (!empId || dias === 0 || !preview) { if (preview) preview.style.display = 'none'; return; }
   const emp = empleados.find(e => e.id === empId);
   if (!emp) return;
-  const monto = (parseFloat(emp.horaBase) || 0) * 8 * dias;
+
+  const horaBase = parseFloat(emp.horaBase) || 0;
+  const monto = horaBase * 8 * dias;
   const s = vacSaldo(empId);
   const pago = document.getElementById('vac-pago')?.value || 'efectivo';
+  const periodo = periodoSel?.options[periodoSel.selectedIndex]?.text || '—';
+
+  const tipoLabel = tipo === 'ambas' ? '🌴💰 Disfrutadas y canceladas' :
+                    tipo === 'disfrutada' ? '🌴 Solo disfrutadas (descanso)' :
+                    '💰 Solo canceladas (pago)';
+
+  const diasSaldo = dias;
+
   preview.style.display = '';
   preview.innerHTML = `
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem">
       <div><div style="font-size:11px;color:var(--text3)">Empleado</div><div style="font-weight:600">${emp.nombre}</div></div>
-      <div><div style="font-size:11px;color:var(--text3)">Tipo</div><div style="font-weight:600">${tipo === 'cancelada' ? '💰 Canceladas (pago)' : '🌴 Disfrutadas (descanso)'}</div></div>
-      <div><div style="font-size:11px;color:var(--text3)">Días</div><div style="font-weight:600">${dias} días hábiles</div></div>
-      <div><div style="font-size:11px;color:var(--text3)">Hora base</div><div style="font-family:'DM Mono',monospace">${fmtMon(emp.horaBase)}</div></div>
-      <div><div style="font-size:11px;color:var(--text3)">Monto (sin CCSS)</div><div style="font-weight:700;color:var(--accent);font-family:'DM Mono',monospace">${fmtMon(monto)}</div></div>
-      ${tipo === 'cancelada' ? `<div><div style="font-size:11px;color:var(--text3)">Forma de pago</div><div style="font-weight:600">${pago === 'transferencia' ? 'Transferencia' : 'Efectivo'}</div></div>` : '<div></div>'}
-      <div style="grid-column:1/-1;border-top:1px solid var(--border);padding-top:.5rem;font-size:12px;color:${s.disponibles >= dias ? 'var(--accent)' : 'var(--danger)'}">
-        Saldo disponible: <strong>${s.disponibles} días</strong> → tras este registro: <strong>${s.disponibles - dias} días</strong>
-        ${s.disponibles < dias ? ' ⚠ Saldo insuficiente' : ''}
+      <div><div style="font-size:11px;color:var(--text3)">Período</div><div style="font-weight:600">${periodo}</div></div>
+      <div><div style="font-size:11px;color:var(--text3)">Tipo</div><div style="font-weight:600">${tipoLabel}</div></div>
+      <div><div style="font-size:11px;color:var(--text3)">Fechas</div><div style="font-weight:600">${fechaIni} al ${fechaFin}</div></div>
+      <div><div style="font-size:11px;color:var(--text3)">Días hábiles</div><div style="font-weight:700;color:var(--accent)">${dias}</div></div>
+      <div><div style="font-size:11px;color:var(--text3)">Monto (sin CCSS)</div><div style="font-weight:700;color:var(--accent);font-family:'DM Mono',monospace">${tipo === 'disfrutada' ? '—' : fmtMon(monto)}</div></div>
+      ${tipo !== 'disfrutada' ? `<div><div style="font-size:11px;color:var(--text3)">Forma de pago</div><div style="font-weight:600">${pago === 'transferencia' ? 'Transferencia' : 'Efectivo'}</div></div>` : '<div></div>'}
+      <div style="grid-column:1/-1;border-top:1px solid var(--border);padding-top:.5rem;font-size:12px">
+        ${tipo !== 'disfrutada' ? `<span style="color:${s.disponiblesC >= diasSaldo ? 'var(--accent)' : 'var(--danger)'}">C: ${s.disponiblesC} días disponibles → quedarán ${s.disponiblesC - diasSaldo} ${s.disponiblesC < diasSaldo ? '⚠' : '✓'}</span>` : ''}
+        ${tipo !== 'cancelada' ? `<span style="color:${s.disponiblesD >= diasSaldo ? 'var(--accent)' : 'var(--danger)'}; margin-left:1rem">D: ${s.disponiblesD} días disponibles → quedarán ${s.disponiblesD - diasSaldo} ${s.disponiblesD < diasSaldo ? '⚠' : '✓'}</span>` : ''}
       </div>
     </div>`;
 }
@@ -2810,43 +2843,72 @@ function calcularPreviewVac() { actualizarPreviewVac(); }
 
 function registrarVacaciones() {
   const empId = document.getElementById('vac-emp')?.value;
-  const dias = parseInt(document.getElementById('vac-dias')?.value) || 0;
   const tipo = document.getElementById('vac-tipo')?.value;
   const pago = document.getElementById('vac-pago')?.value || 'efectivo';
-  const fecha = document.getElementById('vac-fecha')?.value || new Date().toISOString().split('T')[0];
+  const fechaIni = document.getElementById('vac-fecha-ini')?.value || '';
+  const fechaFin = document.getElementById('vac-fecha-fin')?.value || '';
   const nota = document.getElementById('vac-nota-reg')?.value || '';
+  const periodoSel = document.getElementById('vac-periodo');
+  const periodo = periodoSel?.value || '';
+  const periodoLabel = periodoSel?.options[periodoSel.selectedIndex]?.text || '';
+  const fechaHoy = new Date().toISOString().split('T')[0];
 
   if (!empId) { toast('Seleccioná un empleado', 'warn'); return; }
-  if (!dias || dias < 1) { toast('Ingresá la cantidad de días', 'warn'); return; }
+  if (!fechaIni) { toast('Ingresá la fecha de inicio', 'warn'); return; }
+  if (!fechaFin) { toast('Ingresá la fecha de fin', 'warn'); return; }
+
+  const dias = calcularDiasHabiles(fechaIni, fechaFin);
+  if (!dias || dias < 1) { toast('Sin días hábiles en el rango seleccionado', 'warn'); return; }
 
   const emp = empleados.find(e => e.id === empId);
   if (!emp) return;
+
   const monto = (parseFloat(emp.horaBase) || 0) * 8 * dias;
   const s = vacSaldo(empId);
 
-  if (s.disponibles < dias) {
-    if (!confirm(`⚠ El empleado solo tiene ${s.disponibles} días disponibles. ¿Registrar de todas formas?`)) return;
+  const saldoInsuficiente = (tipo === 'cancelada' && s.disponiblesC < dias) ||
+    (tipo === 'disfrutada' && s.disponiblesD < dias) ||
+    (tipo === 'ambas' && (s.disponiblesC < dias || s.disponiblesD < dias));
+  if (saldoInsuficiente) {
+    if (!confirm(`⚠ Saldo insuficiente. ¿Registrar de todas formas?`)) return;
   }
 
-  const registro = {
-    id: Date.now().toString(),
-    empId, nombre: emp.nombre, tipo, dias, monto,
-    pago: tipo === 'cancelada' ? pago : 'disfrutada',
-    fecha, nota
-  };
-  vacRegistros.unshift(registro);
+  const id = Date.now().toString();
+  const registros = [];
+
+  if (tipo === 'disfrutada' || tipo === 'ambas') {
+    registros.push({
+      id: id+'_d', empId, nombre: emp.nombre, tipo: 'disfrutada',
+      dias, monto: 0, pago: 'disfrutada', fecha: fechaHoy,
+      fechaIni, fechaFin, periodo, periodoLabel, nota, grupoId: id
+    });
+  }
+  if (tipo === 'cancelada' || tipo === 'ambas') {
+    registros.push({
+      id: id+'_c', empId, nombre: emp.nombre, tipo: 'cancelada',
+      dias, monto, pago, fecha: fechaHoy,
+      fechaIni, fechaFin, periodo, periodoLabel, nota, grupoId: id
+    });
+  }
+
+  registros.forEach(r => {
+    vacRegistros.unshift(r);
+    if (accessToken) guardarVacEnSheets(r);
+  });
+
   try { localStorage.setItem('planilla_vac_registros', JSON.stringify(vacRegistros)); } catch(e) {}
+  toast('Vacaciones registradas correctamente', 'ok');
 
-  // Guardar en Sheets
-  if (accessToken) guardarVacEnSheets(registro);
+  generarConstanciaVacaciones({
+    emp, dias, fechaIni, fechaFin, periodo: periodoLabel,
+    tipo, pago, monto, fechaDoc: fechaHoy, grupoId: id
+  });
 
-  toast(`Vacaciones registradas — ${fmtMon(monto)}`, 'ok');
   renderVacSaldo();
-
-  // Limpiar form
-  document.getElementById('vac-dias').value = 1;
-  document.getElementById('vac-nota-reg').value = '';
-  document.getElementById('vac-preview').style.display = 'none';
+  ['vac-nota-reg','vac-fecha-ini','vac-fecha-fin'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  const dd=document.getElementById('vac-dias-display');if(dd)dd.textContent='— días';
+  const di=document.getElementById('vac-dias');if(di)di.value=0;
+  const pv=document.getElementById('vac-preview');if(pv)pv.style.display='none';
 }
 
 // guardarVacEnSheets moved to sync module
