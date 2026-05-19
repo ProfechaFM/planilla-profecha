@@ -1499,8 +1499,9 @@ function renderBilletes(){
     const dif=Math.abs(redondeado-r.netoEf);
     const vacLabel = r.vacEf>0?` <span style="font-size:9px;background:#fef3c7;color:#92400e;padding:1px 4px;border-radius:3px">+vac ${fmtMon(r.vacEf)}</span>`:'';
     const incLabel = r.incEf>0?` <span style="font-size:9px;background:#bae6fd;color:#0369a1;padding:1px 4px;border-radius:3px">+inc ${fmtMon(r.incEf)}</span>`:'';
+    const rebLabel = r.rebajoRebajo>0?` <span style="font-size:9px;background:#fdf0ef;color:#c0392b;padding:1px 4px;border-radius:3px">-reb ${fmtMon(r.rebajoRebajo)}</span>`:'';
     return`<tr>
-      <td>${nombre}${r.isSplit?' <span class="badge b-split" style="font-size:9px">extras</span>':''}${vacLabel}${incLabel}</td>
+      <td>${nombre}${r.isSplit?' <span class="badge b-split" style="font-size:9px">extras</span>':''}${vacLabel}${incLabel}${rebLabel}</td>
       <td style="font-family:'DM Mono',monospace;color:var(--text2);font-size:12px">${fmtMon(r.netoEf)}</td>
       <td style="font-family:'DM Mono',monospace;font-weight:500">${fmtMon(redondeado)} <span style="font-size:10px;color:${dif===0?'var(--text3)':redondeado>r.netoEf?'var(--accent)':'var(--danger)'}">${dif===0?'=':difSign+fmtMon(dif)}</span></td>
       ${DENOMS.map(d=>`<td style="text-align:right;font-family:'DM Mono',monospace">${b[d]||'—'}</td>`).join('')}
@@ -2025,6 +2026,7 @@ async function guardarRegistro(){
   const rows=resultados.filter(r=>!r.sinPerfil).map(r=>[r.empId,r.nombre,r.emp.cuenta||'N/A',Math.round(r.neto),Math.round(r.rebajoCC),Math.round(r.bruto)]);
   try{
     await sobreescribirOAgregar('Registro Semanal',etiqueta,header,rows);
+    commitRebajosSemanales();
     toast('Registro semanal guardado','ok');
   }catch(e){toast('Error: '+e.message,'err');}
 }
@@ -3195,26 +3197,45 @@ function aplicarIncapacidadesAlCalculo() {
 }
 
 function aplicarRebajosAlCalculo() {
+  // SOLO aplica al display (neto visual). No muta r.pagado ni r.semanaCalculo.
+  // El commit real (persistir pagado, avanzar semanaCalculo, guardar historial)
+  // ocurre en commitRebajosSemanales(), llamado únicamente desde guardarRegistroSemanal().
   const semana = weekLabel();
   const wk = weekKey();
   rebajos.filter(r => r.activo).forEach(r => {
-    // Aplica si semanaCalculo coincide o si no tiene semana asignada
     const sc = r.semanaCalculo || wk;
     if (sc !== wk) return;
-    // Anti-duplicado via historial
-    if (rebajosHistorial.some(h => h.rebajoId === r.id && h.semana === semana)) return;
     const res = resultados.find(x => x.empId === r.empId);
     if (!res || res.sinPerfil) return;
     const pendiente = r.total - r.pagado;
     const cuota = Math.min(r.cuota, pendiente, res.neto);
     if (cuota <= 0) return;
-    // Descontar del neto
+    // Solo modificar el display, sin tocar r.pagado
     res.neto -= cuota;
     if (res.isSplit) { res.netoTr = Math.max(0, res.netoTr - cuota); }
     else if (res.emp?.pago === 'transferencia') { res.netoTr = res.neto; res.netoEf = 0; }
     else { res.netoEf = res.neto; res.netoTr = 0; }
     res.rebajoRebajo = (res.rebajoRebajo||0) + cuota;
-    // Actualizar rebajo
+    res.rebajosAplicados = res.rebajosAplicados || [];
+    res.rebajosAplicados.push({ rebajoId: r.id, cuota, concepto: r.concepto });
+  });
+}
+
+function commitRebajosSemanales() {
+  // Llamado UNA sola vez al guardar el registro semanal (guardarRegistroSemanal).
+  // Persiste pagado, avanza semanaCalculo y guarda historial en Sheets.
+  const semana = weekLabel();
+  const wk = weekKey();
+  // Anti-duplicado: si ya se hizo commit esta semana no repetir
+  if (rebajosHistorial.some(h => h.semana === semana)) return;
+  rebajos.filter(r => r.activo).forEach(r => {
+    const sc = r.semanaCalculo || wk;
+    if (sc !== wk) return;
+    const res = resultados.find(x => x.empId === r.empId);
+    if (!res || res.sinPerfil) return;
+    const pendiente = r.total - r.pagado;
+    const cuota = Math.min(r.cuota, pendiente, (res.neto + (res.rebajoRebajo||0))); // neto antes del rebajo
+    if (cuota <= 0) return;
     r.pagado += cuota;
     if (r.pagado >= r.total) { r.activo = false; r.semanaCalculo = ''; }
     else {
@@ -3222,10 +3243,8 @@ function aplicarRebajosAlCalculo() {
       sig.setDate(sig.getDate() + 7);
       r.semanaCalculo = sig.toISOString().split('T')[0];
     }
-    // Historial
     const entrada = { id: Date.now().toString()+r.id, rebajoId: r.id, semana, empId: r.empId, nombre: r.nombre, concepto: r.concepto, cuotaAplicada: cuota, pendienteTras: r.total - r.pagado };
     rebajosHistorial.unshift(entrada);
-    // Persistir
     try { localStorage.setItem('planilla_rebajos', JSON.stringify(rebajos)); localStorage.setItem('planilla_rebajos_hist', JSON.stringify(rebajosHistorial)); } catch(e) {}
     if (accessToken) { actualizarRebajoSheets(r); guardarHistorialRebajoSheets(entrada); }
   });
