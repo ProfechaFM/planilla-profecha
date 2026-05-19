@@ -141,20 +141,20 @@ tr:hover td{background:var(--bg)}
     <div class="logo-sub">PROFECHA · Planilla</div>
   </div>
   <nav class="nav">
-    <div class="nav-item active" onclick="nav('inicio',this)"><span>⌂</span> Inicio</div>
-    <div class="nav-item" onclick="nav('horario',this)"><span>▦</span> Horario semanal</div>
-    <div class="nav-item" onclick="nav('calculo',this)"><span>∑</span> Cálculo de pago</div>
-    <div class="nav-item" onclick="nav('transferencias',this)"><span>⇄</span> Transferencias</div>
-    <div class="nav-item" onclick="nav('billetes',this)"><span>₡</span> Billetes</div>
-    <div class="nav-item" onclick="nav('comprobantes',this)"><span>▤</span> Comprobantes</div>
-    <div class="nav-item" onclick="nav('historial',this)"><span>◷</span> Historial</div>
-    <div class="nav-item" onclick="nav('aguinaldo',this)"><span>✦</span> Aguinaldo</div>
-    <div class="nav-item" onclick="nav('vacaciones',this)"><span>☀</span> Vacaciones</div>
-    <div class="nav-item" onclick="nav('rebajos',this)"><span>↓</span> Rebajos</div>
-    <div class="nav-item" onclick="nav('incapacidades',this)"><span>✚</span> Incapacidades</div>
-    <div class="nav-item" onclick="nav('empleados',this)"><span>☰</span> Empleados</div>
-    <div class="nav-item" onclick="nav('config',this)"><span>◈</span> Configuración</div>
-    <div class="nav-item" onclick="nav('guia',this)"><span>?</span> Guía de uso</div>
+    <div class="nav-item active" data-nav="inicio"><span>⌂</span> Inicio</div>
+    <div class="nav-item" data-nav="horario"><span>▦</span> Horario semanal</div>
+    <div class="nav-item" data-nav="calculo"><span>∑</span> Cálculo de pago</div>
+    <div class="nav-item" data-nav="transferencias"><span>⇄</span> Transferencias</div>
+    <div class="nav-item" data-nav="billetes"><span>₡</span> Billetes</div>
+    <div class="nav-item" data-nav="comprobantes"><span>▤</span> Comprobantes</div>
+    <div class="nav-item" data-nav="historial"><span>◷</span> Historial</div>
+    <div class="nav-item" data-nav="aguinaldo"><span>✦</span> Aguinaldo</div>
+    <div class="nav-item" data-nav="vacaciones"><span>☀</span> Vacaciones</div>
+    <div class="nav-item" data-nav="rebajos"><span>↓</span> Rebajos</div>
+    <div class="nav-item" data-nav="incapacidades"><span>✚</span> Incapacidades</div>
+    <div class="nav-item" data-nav="empleados"><span>☰</span> Empleados</div>
+    <div class="nav-item" data-nav="config"><span>◈</span> Configuración</div>
+    <div class="nav-item" data-nav="guia"><span>?</span> Guía de uso</div>
   </nav>
   <div class="conn-bar">
     <div class="conn-ind"><span class="dot" id="conn-dot"></span><span id="conn-txt">Sin conectar</span></div>
@@ -1002,9 +1002,8 @@ tr:hover td{background:var(--bg)}
 </main>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
-document.addEventListener("DOMContentLoaded", function() {
 // ── Utilities (defined first — used throughout) ──────────────────
 function debounce(fn,ms=400){let tid;return(...args)=>{clearTimeout(tid);tid=setTimeout(()=>fn(...args),ms);};}
 const MESES_ES=['ene','feb','mar','abr','may','jun','jul','ago','set','oct','nov','dic'];
@@ -1076,6 +1075,11 @@ function nav(id,el){
   if(id==='rebajos')renderRebajosActivos();
   if(id==='incapacidades'){poblarIncEmpSelect();actualizarPreviewInc();}
 }
+
+// Wire nav items — must be after nav() is defined
+document.querySelectorAll('[data-nav]').forEach(function(el) {
+  el.addEventListener('click', function() { nav(this.dataset.nav, this); });
+});
 
 function updateHeader(){
   document.getElementById('week-label').textContent=weekLabel();
@@ -3476,7 +3480,6 @@ function reabrirConstanciaById(grupoId) {
   win.document.open(); win.document.write(html); win.document.close();
 }
 
-}); // DOMContentLoaded
 </script>
 </body>
 </html>
