@@ -3370,17 +3370,20 @@ function exportarIncExcel() {
 // Aplicar incapacidades al cálculo de la semana
 function aplicarIncapacidadesAlCalculo() {
   const wk = weekKey();
-  const gruposAplicados = new Set();
 
+  // Incluir todas las incapacidades que no hayan sido marcadas como pagadas
+  // Sin CCSS, sin porción de descanso, sin rebajos
   const pendientes = incRegistros.filter(r =>
-    r.monto > 0 && (!r.incSemanaCalculo && !r.pagadoEnSemana)
+    r.monto > 0 && r.pagadoEnSemana !== wk
   );
 
   if (!pendientes.length) return;
 
+  const yaAplicados = new Set();
+
   pendientes.forEach(r => {
-    if (gruposAplicados.has(r.id)) return;
-    gruposAplicados.add(r.id);
+    if (yaAplicados.has(r.id)) return;
+    yaAplicados.add(r.id);
 
     const resultado = resultados.find(res => res.empId === r.empId);
     const emp = empleados.find(e => e.id === r.empId);
@@ -3388,7 +3391,7 @@ function aplicarIncapacidadesAlCalculo() {
 
     const montoInc = r.monto;
     const pago = r.pago || emp.pago || 'efectivo';
-    const incItem = { dias: r.dias, monto: montoInc, pago, caso: r.caso, registroId: r.id };
+    const incItem = { dias: r.dias, monto: montoInc, pago, caso: r.caso||'', registroId: r.id };
 
     if (resultado) {
       if (!resultado.incapacidades) resultado.incapacidades = [];
@@ -3402,7 +3405,6 @@ function aplicarIncapacidadesAlCalculo() {
       }
       resultado.neto += montoInc;
     } else {
-      // Sin horas esta semana — solo incapacidad
       resultados.push({
         emp, empId: r.empId, nombre: emp.nombre,
         hNorm:0, hExtra:0, hDoble:0, hExtraDoble:0,
@@ -3416,7 +3418,12 @@ function aplicarIncapacidadesAlCalculo() {
         incTr: pago === 'transferencia' ? montoInc : 0,
       });
     }
+
+    // Marcar como aplicada en esta semana para evitar doble conteo si se recalcula
+    r.pagadoEnSemana = wk;
   });
+
+  try { localStorage.setItem('planilla_inc_registros', JSON.stringify(incRegistros)); } catch(e) {}
 }
 function aplicarRebajosAlCalculo() {
   const semana = weekLabel();
@@ -3537,19 +3544,13 @@ function poblarVacPeriodos(empId) {
   ).join('');
 }
 
-// Auto-calculate business days from date range
+// Calcular días de vacaciones — todos los días corridos (en restaurantes se trabaja cualquier día)
 function calcularDiasHabiles(fechaIniStr, fechaFinStr) {
   if (!fechaIniStr || !fechaFinStr) return 0;
   const ini = new Date(fechaIniStr + 'T12:00:00');
   const fin = new Date(fechaFinStr + 'T12:00:00');
   if (ini > fin) return 0;
-  let count = 0;
-  const cur = new Date(ini);
-  while (cur <= fin) {
-    if (cur.getDay() >= 1 && cur.getDay() <= 5) count++; // Mon-Fri
-    cur.setDate(cur.getDate() + 1);
-  }
-  return count;
+  return Math.round((fin - ini) / (1000 * 60 * 60 * 24)) + 1;
 }
 
 // Override registrarVacaciones with improved version
@@ -3859,7 +3860,7 @@ async function cargarIncapacidadesSheets() {
       mes:        r[9]  || '',
       nota:       r[10] || '',
       id:         r[11] || Date.now().toString(),
-      pagadoEnSemana: false
+      pagadoEnSemana: null  // null = nunca pagado, se marca con weekKey al calcular
     });
   }
   incRegistros = incs;
