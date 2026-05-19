@@ -620,19 +620,19 @@ tr:hover td{background:var(--bg)}
 <!-- INCAPACIDADES -->
 <div id="page-incapacidades" class="page">
   <div class="page-header">
-    <div class="page-title">Incapacidades</div>
-    <div class="page-sub">Se pagan 4 horas por día incapacitado, máximo 3 días por mes. Sin CCSS ni porción de descanso.</div>
+    <div class="page-title">Licencias e Incapacidades</div>
+    <div class="page-sub">Registrá incapacidades CCSS, licencias de maternidad o licencias con goce de salario.</div>
   </div>
 
   <div style="display:flex;gap:6px;margin-bottom:1rem;border-bottom:2px solid var(--border);padding-bottom:0">
-    <button id="inc-tab-registrar" class="btn btn-p" style="border-radius:6px 6px 0 0;border-bottom:none;font-size:12px" onclick="incTab('registrar')">Registrar incapacidad</button>
+    <button id="inc-tab-registrar" class="btn btn-p" style="border-radius:6px 6px 0 0;border-bottom:none;font-size:12px" onclick="incTab('registrar')">Registrar</button>
     <button id="inc-tab-historial" class="btn btn-s" style="border-radius:6px 6px 0 0;border-bottom:none;font-size:12px" onclick="incTab('historial')">Historial</button>
   </div>
 
   <!-- TAB: Registrar -->
   <div id="inc-tab-registrar-content">
     <div class="card">
-      <div class="card-title">Nueva incapacidad</div>
+      <div class="card-title">Nueva licencia / incapacidad</div>
       <div class="form-grid">
         <div class="fg">
           <label>Empleado</label>
@@ -641,8 +641,23 @@ tr:hover td{background:var(--bg)}
           </select>
         </div>
         <div class="fg">
+          <label>Tipo</label>
+          <select id="inc-tipo" onchange="actualizarTipoInc()" style="font-size:13px;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--rs);background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif">
+            <option value="incapacidad">🏥 Incapacidad CCSS (4h/día, máx. 3 días)</option>
+            <option value="maternidad">🤱 Licencia de maternidad (24h/semana)</option>
+            <option value="goce">📋 Licencia con goce de salario (% jornada)</option>
+          </select>
+        </div>
+        <!-- Campo caso CCSS — solo para incapacidad -->
+        <div class="fg" id="inc-caso-wrap">
           <label>Número de caso CCSS</label>
           <input type="text" id="inc-caso" placeholder="Ej: 2026-12345" class="edit-inp" style="width:100%">
+        </div>
+        <!-- Campo % — solo para licencia con goce -->
+        <div class="fg" id="inc-pct-wrap" style="display:none">
+          <label>Porcentaje de jornada (%)</label>
+          <input type="number" id="inc-pct" min="1" max="100" value="50" oninput="actualizarPreviewInc()" class="edit-inp" style="width:100%">
+          <span style="font-size:11px;color:var(--text3);margin-top:2px">100% = 48h semanales × hora base</span>
         </div>
         <div class="fg">
           <label>Fecha inicio</label>
@@ -652,8 +667,8 @@ tr:hover td{background:var(--bg)}
           <label>Fecha fin</label>
           <input type="date" id="inc-fecha-fin" oninput="actualizarPreviewInc()" class="edit-inp" style="width:100%">
         </div>
-        <div class="fg">
-          <label>Días a pagar (máx. 3 por mes, calculado automático)</label>
+        <div class="fg" id="inc-dias-wrap">
+          <label id="inc-dias-label">Días a pagar</label>
           <div id="inc-dias-display" style="padding:8px 12px;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--rs);font-family:'DM Mono',monospace;font-size:14px;font-weight:600;color:var(--accent)">— días</div>
           <input type="hidden" id="inc-dias" value="0">
         </div>
@@ -664,7 +679,7 @@ tr:hover td{background:var(--bg)}
       </div>
       <div id="inc-preview" style="margin-top:1rem;padding:12px;background:var(--surface2);border-radius:8px;font-size:13px;display:none"></div>
       <div style="margin-top:1rem;display:flex;gap:8px">
-        <button class="btn btn-p" onclick="registrarIncapacidad()">Guardar incapacidad</button>
+        <button class="btn btn-p" onclick="registrarIncapacidad()">Guardar</button>
         <button class="btn btn-s" onclick="actualizarPreviewInc()">Calcular preview</button>
       </div>
     </div>
@@ -674,7 +689,7 @@ tr:hover td{background:var(--bg)}
   <div id="inc-tab-historial-content" style="display:none">
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:8px">
-        <div class="card-title" style="margin-bottom:0">Historial de incapacidades</div>
+        <div class="card-title" style="margin-bottom:0">Historial de licencias e incapacidades</div>
         <div style="display:flex;gap:8px">
           <select id="inc-hist-emp" onchange="renderIncHistorial()" style="font-size:12px;padding:5px 8px;border:1px solid var(--border2);border-radius:var(--rs);background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif">
             <option value="">Todos los empleados</option>
@@ -684,11 +699,12 @@ tr:hover td{background:var(--bg)}
       </div>
       <div class="tab-wrap">
         <table><thead><tr>
-          <th>Fecha reg.</th><th>ID</th><th>Empleado</th><th>N° Caso</th>
-          <th>Período incap.</th><th style="text-align:right">Días</th>
-          <th style="text-align:right">Monto</th><th>Pago</th><th>Nota</th><th></th>
+          <th>Fecha reg.</th><th>ID</th><th>Empleado</th><th>Tipo</th><th>Ref./Caso</th>
+          <th>Período</th><th style="text-align:right">Días/Sem</th>
+          <th style="text-align:right">Bruto</th><th style="text-align:right">CCSS</th>
+          <th style="text-align:right">Neto</th><th>Pago</th><th>Nota</th><th></th>
         </tr></thead>
-        <tbody id="inc-hist-tbody"><tr><td colspan="10" style="text-align:center;color:var(--text3);padding:2rem">Sin registros</td></tr></tbody>
+        <tbody id="inc-hist-tbody"><tr><td colspan="13" style="text-align:center;color:var(--text3);padding:2rem">Sin registros</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -1618,7 +1634,14 @@ function renderComprobantes(){
       <div class="comp-total"><span>SALARIO NETO</span><span>${fmtMon(r.neto)}</span></div>
       ${r.isSplit?`<div style="margin-top:3px;padding:3px 6px;background:var(--warn-l);border-radius:4px;font-size:10px"><strong>Desglose:</strong> Transferencia: ${fmtMon((r.netoTr||0)-(r.vacTr||0)-(r.incTr||0))} · Efectivo: ${fmtMon((r.netoEf||0)-(r.vacEf||0)-(r.incEf||0))}</div>`:''}
       ${r.vacaciones&&r.vacaciones.length?`<div style="margin-top:3px;padding:4px 6px;background:#fef3c7;border-radius:4px;font-size:10px;border-left:3px solid #b7791f"><strong style="color:#92400e">Vacaciones:</strong> ${r.vacaciones.map(v=>`${v.dias} día${v.dias!==1?'s':''} · ${fmtMon(v.monto)} (${v.pago==='transferencia'?'Transfer':'Efectivo'})${v.periodo?' · '+v.periodo:''}`).join(' | ')}</div>`:''}
-      ${r.incapacidades&&r.incapacidades.length?`<div style="margin-top:3px;padding:4px 6px;background:#e0f2fe;border-radius:4px;font-size:10px;border-left:3px solid #0369a1"><strong style="color:#0369a1">Incapacidad:</strong> ${r.incapacidades.map(i=>`${i.dias} día${i.dias!==1?'s':''} × 4h · ${fmtMon(i.monto)}${i.caso?' · Caso: '+i.caso:''}`).join(' | ')}</div>`:''}
+      ${r.incapacidades&&r.incapacidades.length?`<div style="margin-top:3px;padding:4px 6px;background:#e0f2fe;border-radius:4px;font-size:10px;border-left:3px solid #0369a1">${r.incapacidades.map(i=>{
+        const tipoIcon={'incapacidad':'🏥','maternidad':'🤱','goce':'📋'}[i.tipo||'incapacidad']||'🏥';
+        const tipoNom={'incapacidad':'Incapacidad','maternidad':'Lic. Maternidad','goce':'Lic. con Goce'}[i.tipo||'incapacidad']||'Incapacidad';
+        const unidadLbl=(i.tipo==='incapacidad')?`${i.dias} día${i.dias!==1?'s':''}`:`${i.dias} sem.`;
+        const detalle=i.tipo==='incapacidad'?(i.caso?' · Caso: '+i.caso:''):(i.tipo==='goce'?' · '+i.pct+'%':'');
+        const ccssLbl=i.rebajoCC>0?` · CCSS -${fmtMon(i.rebajoCC)}`:'';
+        return `<strong style="color:#0369a1">${tipoIcon} ${tipoNom}:</strong> ${unidadLbl}${detalle} · Neto: ${fmtMon(i.monto)}${ccssLbl}`;
+      }).join(' | ')}</div>`:''}
       <div class="comp-firma">
         <span>Pago: ${r.isSplit?'Mixto':r.emp.pago==='transferencia'?'Transferencia':'Efectivo'}</span>
         <span>Cédula: <span style="display:inline-block;border-bottom:1px solid var(--border2);width:120px;vertical-align:bottom">&nbsp;</span></span>
@@ -2689,11 +2712,12 @@ function vacSaldo(empId) {
   const ajC = aj.canceladas || 0;
   const ajD = aj.disfrutadas || 0;
 
-  // Contar registros nuevos por grupoId único
+  // Deduplicar por grupoId+tipo (no solo grupoId)
+  // Un grupo "ambas" genera 2 registros: uno cancelada y uno disfrutada — ambos deben contarse
   const gruposContados = new Set();
   let regCanceladas = 0, regDisfrutadas = 0;
   vacRegistros.filter(r => r.empId === empId).forEach(r => {
-    const key = r.grupoId || r.id;
+    const key = (r.grupoId || r.id) + '_' + r.tipo;
     if (gruposContados.has(key)) return;
     gruposContados.add(key);
     if (r.tipo === 'cancelada') regCanceladas += r.dias;
@@ -3179,7 +3203,8 @@ function aplicarIncapacidadesAlCalculo() {
     const emp = empleados.find(e => e.id === r.empId);
     if (!emp) return;
     const pago = r.pago || emp.pago || 'efectivo';
-    const item = { dias: r.dias, monto: r.monto, pago, caso: r.caso||'', registroId: r.id };
+    const tipo = r.tipo || 'incapacidad';
+    const item = { dias: r.dias, monto: r.monto, bruto: r.bruto||r.monto, rebajoCC: r.rebajoCC||0, pago, caso: r.caso||'', tipo, pct: r.pct||null, registroId: r.id };
     const res = resultados.find(x => x.empId === r.empId);
     if (res) {
       if (!res.incapacidades) res.incapacidades = [];
@@ -3409,16 +3434,20 @@ async function reescribirRebajosSheets() {
 
 // ── INCAPACIDADES ──────────────────────────────────────────────────
 async function cargarIncapacidadesSheets() {
-  const d = await sheetsGet('Incapacidades!A1:M500');
+  const d = await sheetsGet('Incapacidades!A1:Q500');
   const rows = d.values || [];
   incRegistros = [];
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i]; if (!r || !r[0]) continue;
     incRegistros.push({
       fecha: r[0]||'', empId: String(r[1]||''), nombre: r[2]||'', caso: r[3]||'',
-      fechaIni: r[4]||'', fechaFin: r[5]||'', dias: parseInt(r[6])||0,
+      fechaIni: r[4]||'', fechaFin: r[5]||'', dias: parseFloat(r[6])||0,
       monto: parseFloat(r[7])||0, pago: r[8]||'efectivo', mes: r[9]||'',
-      nota: r[10]||'', id: r[11]||String(Date.now()), semanaCalculo: r[12]||null
+      nota: r[10]||'', id: r[11]||String(Date.now()), semanaCalculo: r[12]||null,
+      tipo: r[13]||'incapacidad',
+      bruto: parseFloat(r[14])||0,
+      rebajoCC: parseFloat(r[15])||0,
+      pct: r[16]?parseFloat(r[16]):null
     });
   }
   try { localStorage.setItem('planilla_inc_registros', JSON.stringify(incRegistros)); } catch(e) {}
@@ -3428,15 +3457,20 @@ async function guardarIncEnSheets(r) {
   try {
     await sheetsAppend('Incapacidades!A1', [[
       r.fecha, r.empId, r.nombre, r.caso||'', r.fechaIni, r.fechaFin,
-      r.dias, Math.round(r.monto), r.pago, r.mes, r.nota||'', r.id, r.semanaCalculo||''
+      r.dias, Math.round(r.monto), r.pago, r.mes, r.nota||'', r.id, r.semanaCalculo||'',
+      r.tipo||'incapacidad', Math.round(r.bruto||r.monto), Math.round(r.rebajoCC||0), r.pct||''
     ]]);
   } catch(e) { console.warn('guardarInc:', e.message); }
 }
 
 async function reescribirIncapacidadesSheets() {
   try {
-    const rows = [['Fecha_Reg','ID_Emp','Nombre','N_Caso','Fecha_Ini','Fecha_Fin','Dias_Pagar','Monto','Pago','Mes','Nota','ID_Registro','SemanaCalculo']];
-    incRegistros.forEach(r => rows.push([r.fecha, r.empId, r.nombre, r.caso||'', r.fechaIni, r.fechaFin, r.dias, Math.round(r.monto), r.pago, r.mes, r.nota||'', r.id, r.semanaCalculo||'']));
+    const rows = [['Fecha_Reg','ID_Emp','Nombre','N_Caso','Fecha_Ini','Fecha_Fin','Dias_Pagar','Monto_Neto','Pago','Mes','Nota','ID_Registro','SemanaCalculo','Tipo','Bruto','RebajoCC','Pct_Goce']];
+    incRegistros.forEach(r => rows.push([
+      r.fecha, r.empId, r.nombre, r.caso||'', r.fechaIni, r.fechaFin,
+      r.dias, Math.round(r.monto), r.pago, r.mes||'', r.nota||'', r.id, r.semanaCalculo||'',
+      r.tipo||'incapacidad', Math.round(r.bruto||r.monto), Math.round(r.rebajoCC||0), r.pct||''
+    ]));
     await sheetsWrite('Incapacidades!A1', rows);
   } catch(e) { console.warn('reescribirInc:', e.message); }
 }
@@ -3545,16 +3579,64 @@ function poblarIncHistEmpSelect() {
     ).join('');
 }
 
+function actualizarTipoInc() {
+  const tipo = document.getElementById('inc-tipo')?.value || 'incapacidad';
+  const casoWrap = document.getElementById('inc-caso-wrap');
+  const pctWrap  = document.getElementById('inc-pct-wrap');
+  const diasLbl  = document.getElementById('inc-dias-label');
+  if (casoWrap) casoWrap.style.display = tipo === 'incapacidad' ? '' : 'none';
+  if (pctWrap)  pctWrap.style.display  = tipo === 'goce' ? '' : 'none';
+  if (diasLbl)  diasLbl.textContent = tipo === 'incapacidad' ? 'Días a pagar (máx. 3/mes, auto)' :
+                                      tipo === 'maternidad'  ? 'Semanas de licencia' :
+                                                               'Semanas de licencia con goce';
+  actualizarPreviewInc();
+}
+
+// ── Cálculo central por tipo ─────────────────────────────────────────
+function calcIncMonto(tipo, emp, unidades, pct) {
+  const hBase = parseFloat(emp.horaBase) || 0;
+  const ccssX = emp.ccss === 'X';
+  const descRate = cfg.descH / cfg.descD; // 8/48
+  let bruto = 0, descTotal = 0, rebajoCC = 0;
+
+  if (tipo === 'incapacidad') {
+    // 4h por día, sin CCSS ni descanso
+    bruto = hBase * 4 * unidades;
+    rebajoCC = 0;
+    descTotal = 0;
+
+  } else if (tipo === 'maternidad') {
+    // 24h semanales + porción de descanso sobre esas 24h + CCSS
+    const hSem = 24;
+    const base = hBase * hSem * unidades;
+    descTotal = ccssX ? hBase * descRate * hSem * unidades : 0;
+    bruto = base + descTotal;
+    rebajoCC = ccssX ? bruto * (cfg.ccss / 100) : 0;
+
+  } else if (tipo === 'goce') {
+    // pct% de 48h semanales + descanso proporcional + CCSS
+    const hSem = 48 * (pct / 100);
+    const base = hBase * hSem * unidades;
+    descTotal = ccssX ? hBase * descRate * hSem * unidades : 0;
+    bruto = base + descTotal;
+    rebajoCC = ccssX ? bruto * (cfg.ccss / 100) : 0;
+  }
+
+  return { bruto, descTotal, rebajoCC, neto: bruto - rebajoCC };
+}
+
 function actualizarPreviewInc() {
-  const empId = document.getElementById('inc-emp')?.value;
+  const empId    = document.getElementById('inc-emp')?.value;
+  const tipo     = document.getElementById('inc-tipo')?.value || 'incapacidad';
   const fechaIni = document.getElementById('inc-fecha-ini')?.value || '';
   const fechaFin = document.getElementById('inc-fecha-fin')?.value || '';
+  const pct      = parseFloat(document.getElementById('inc-pct')?.value) || 50;
   const diasDisplay = document.getElementById('inc-dias-display');
-  const diasInput = document.getElementById('inc-dias');
-  const preview = document.getElementById('inc-preview');
+  const diasInput   = document.getElementById('inc-dias');
+  const preview     = document.getElementById('inc-preview');
 
   if (!empId || !fechaIni || !fechaFin) {
-    if (diasDisplay) diasDisplay.textContent = '— días';
+    if (diasDisplay) { diasDisplay.textContent = '— días'; diasDisplay.style.color = 'var(--text3)'; }
     if (preview) preview.style.display = 'none';
     return;
   }
@@ -3562,63 +3644,97 @@ function actualizarPreviewInc() {
   const emp = empleados.find(e => e.id === empId);
   if (!emp) return;
 
-  // Días corridos entre fechas
   const ini = new Date(fechaIni + 'T12:00:00');
   const fin = new Date(fechaFin + 'T12:00:00');
   if (ini > fin) { if (diasDisplay) diasDisplay.textContent = '— días'; return; }
-  const diasTotales = Math.round((fin - ini) / (1000*60*60*24)) + 1;
+  const diasCorridos = Math.round((fin - ini) / (1000*60*60*24)) + 1;
 
-  // Máximo 3 días por mes
-  const diasPagar = Math.min(diasTotales, 3);
-  const monto = (parseFloat(emp.horaBase) || 0) * 4 * diasPagar;
-  const mes = ini.toLocaleDateString('es-CR', { month: 'long', year: 'numeric' });
+  let unidades, unidadesLabel, extraNote = '';
 
+  if (tipo === 'incapacidad') {
+    const diasPagar = Math.min(diasCorridos, 3);
+    unidades = diasPagar;
+    unidadesLabel = `${diasPagar} día${diasPagar!==1?'s':''}${diasCorridos>3?' (máx. 3 de '+diasCorridos+' corridos)':''}`;
+    extraNote = 'Sin CCSS ni porción de descanso.';
+  } else {
+    // semanas completas (redondeado a 1 decimal)
+    const semanas = Math.round((diasCorridos / 7) * 10) / 10;
+    unidades = semanas;
+    unidadesLabel = `${semanas} semana${semanas!==1?'s':''}  (${diasCorridos} días corridos)`;
+    if (tipo === 'maternidad') extraNote = 'Con CCSS y porción de descanso sobre 24h/sem.';
+    else extraNote = `Con CCSS y porción de descanso · ${pct}% de 48h semanales.`;
+  }
+
+  if (diasInput) diasInput.value = unidades;
   if (diasDisplay) {
-    diasDisplay.textContent = `${diasPagar} día${diasPagar !== 1 ? 's' : ''} a pagar${diasTotales > 3 ? ' (máx. 3 de '+diasTotales+' corridos)' : ''}`;
+    diasDisplay.textContent = unidadesLabel;
     diasDisplay.style.color = 'var(--accent)';
   }
-  if (diasInput) diasInput.value = diasPagar;
+
+  const { bruto, descTotal, rebajoCC, neto } = calcIncMonto(tipo, emp, unidades, pct);
+  const pago = emp.pago || 'efectivo';
+
+  const tipoLabel = tipo === 'incapacidad' ? '🏥 Incapacidad CCSS' :
+                    tipo === 'maternidad'   ? '🤱 Licencia de maternidad' :
+                                             `📋 Licencia con goce (${pct}%)`;
 
   if (preview) {
     preview.style.display = '';
     preview.innerHTML = `
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem">
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem">
         <div><div style="font-size:11px;color:var(--text3)">Empleado</div><div style="font-weight:600">${emp.nombre}</div></div>
+        <div><div style="font-size:11px;color:var(--text3)">Tipo</div><div style="font-weight:600">${tipoLabel}</div></div>
         <div><div style="font-size:11px;color:var(--text3)">Período</div><div style="font-weight:600">${fechaIni} al ${fechaFin}</div></div>
-        <div><div style="font-size:11px;color:var(--text3)">Mes</div><div style="font-weight:600">${mes}</div></div>
-        <div><div style="font-size:11px;color:var(--text3)">Días a pagar</div><div style="font-weight:700;color:var(--accent)">${diasPagar}</div></div>
-        <div><div style="font-size:11px;color:var(--text3)">Monto (4h/día)</div><div style="font-weight:700;color:var(--accent);font-family:'DM Mono',monospace">${fmtMon(monto)}</div></div>
-        <div><div style="font-size:11px;color:var(--text3)">Forma de pago</div><div style="font-weight:600">${emp.pago === 'transferencia' ? 'Transferencia' : 'Efectivo'}</div></div>
-      </div>`;
+        <div><div style="font-size:11px;color:var(--text3)">${tipo==='incapacidad'?'Días a pagar':'Semanas'}</div><div style="font-weight:700;color:var(--accent)">${unidades}</div></div>
+        ${descTotal>0?`<div><div style="font-size:11px;color:var(--text3)">Porción descanso</div><div style="font-family:'DM Mono',monospace">${fmtMon(descTotal)}</div></div>`:'<div></div>'}
+        <div><div style="font-size:11px;color:var(--text3)">Salario bruto</div><div style="font-weight:700;font-family:'DM Mono',monospace">${fmtMon(bruto)}</div></div>
+        ${rebajoCC>0?`<div><div style="font-size:11px;color:var(--text3)">Rebajo CCSS (${cfg.ccss}%)</div><div style="font-family:'DM Mono',monospace;color:var(--danger)">-${fmtMon(rebajoCC)}</div></div>`:'<div></div>'}
+        <div><div style="font-size:11px;color:var(--text3)">Neto a pagar</div><div style="font-weight:700;color:var(--accent);font-family:'DM Mono',monospace">${fmtMon(neto)}</div></div>
+        <div><div style="font-size:11px;color:var(--text3)">Forma de pago</div><div style="font-weight:600">${pago==='transferencia'?'Transferencia':'Efectivo'}</div></div>
+      </div>
+      ${extraNote?`<div style="margin-top:.6rem;font-size:11px;color:var(--text3)">${extraNote}</div>`:''}`;
   }
 }
 
 function registrarIncapacidad() {
-  const empId = document.getElementById('inc-emp')?.value;
-  const caso = document.getElementById('inc-caso')?.value.trim() || '';
+  const empId    = document.getElementById('inc-emp')?.value;
+  const tipo     = document.getElementById('inc-tipo')?.value || 'incapacidad';
+  const caso     = document.getElementById('inc-caso')?.value.trim() || '';
   const fechaIni = document.getElementById('inc-fecha-ini')?.value || '';
   const fechaFin = document.getElementById('inc-fecha-fin')?.value || '';
-  const nota = document.getElementById('inc-nota')?.value.trim() || '';
-  const diasPagar = parseInt(document.getElementById('inc-dias')?.value) || 0;
+  const nota     = document.getElementById('inc-nota')?.value.trim() || '';
+  const pct      = parseFloat(document.getElementById('inc-pct')?.value) || 50;
+  const unidades = parseFloat(document.getElementById('inc-dias')?.value) || 0;
 
   if (!empId) { toast('Seleccioná un empleado', 'warn'); return; }
-  if (!fechaIni || !fechaFin) { toast('Ingresá las fechas de la incapacidad', 'warn'); return; }
-  if (diasPagar < 1) { toast('Sin días a pagar — revisá las fechas', 'warn'); return; }
+  if (!fechaIni || !fechaFin) { toast('Ingresá las fechas', 'warn'); return; }
+  if (unidades < 0.1) { toast('Sin período válido — revisá las fechas', 'warn'); return; }
 
   const emp = empleados.find(e => e.id === empId);
   if (!emp) return;
 
-  const monto = (parseFloat(emp.horaBase) || 0) * 4 * diasPagar;
+  const { bruto, rebajoCC, neto } = calcIncMonto(tipo, emp, unidades, pct);
+  if (neto <= 0) { toast('El monto calculado es ₡0 — revisá los datos', 'warn'); return; }
+
   const pago = emp.pago || 'efectivo';
-  const ini = new Date(fechaIni + 'T12:00:00');
-  const mes = ini.toLocaleDateString('es-CR', { month: 'long', year: 'numeric' });
+  const ini  = new Date(fechaIni + 'T12:00:00');
+  const mes  = ini.toLocaleDateString('es-CR', { month: 'long', year: 'numeric' });
   const fechaHoy = new Date().toISOString().split('T')[0];
 
+  // El campo `dias` guarda unidades (días para incapacidad, semanas para los otros)
+  // El campo `monto` guarda el NETO a pagar (lo que suma al resultado del empleado)
+  // Guardamos también bruto y rebajoCC para mostrarlo en historial y comprobante
   const registro = {
     id: Date.now().toString(),
     fecha: fechaHoy, empId, nombre: emp.nombre,
-    caso, fechaIni, fechaFin,
-    dias: diasPagar, monto, pago, mes, nota,
+    tipo, // 'incapacidad' | 'maternidad' | 'goce'
+    caso: tipo === 'incapacidad' ? caso : '',
+    pct: tipo === 'goce' ? pct : null,
+    fechaIni, fechaFin,
+    dias: unidades,       // días si incapacidad, semanas si maternidad/goce
+    monto: neto,          // neto a pagar (lo que se suma al resultado)
+    bruto, rebajoCC,
+    pago, mes, nota,
     semanaCalculo: weekKey()
   };
 
@@ -3626,13 +3742,13 @@ function registrarIncapacidad() {
   try { localStorage.setItem('planilla_inc_registros', JSON.stringify(incRegistros)); } catch(e) {}
   if (accessToken) guardarIncEnSheets(registro);
 
-  toast(`Incapacidad registrada — ${diasPagar} día${diasPagar!==1?'s':''} · ${fmtMon(monto)}`, 'ok');
+  const tipoLabel = tipo === 'incapacidad' ? 'Incapacidad' : tipo === 'maternidad' ? 'Lic. maternidad' : 'Lic. con goce';
+  toast(`${tipoLabel} registrada — ${fmtMon(neto)} neto`, 'ok');
 
-  // Limpiar form
   ['inc-caso','inc-nota','inc-fecha-ini','inc-fecha-fin'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
-  const dd = document.getElementById('inc-dias-display'); if (dd) dd.textContent = '— días';
+  const dd = document.getElementById('inc-dias-display'); if (dd) { dd.textContent = '— días'; dd.style.color = 'var(--text3)'; }
   const di = document.getElementById('inc-dias'); if (di) di.value = 0;
   const pv = document.getElementById('inc-preview'); if (pv) pv.style.display = 'none';
 }
@@ -3641,43 +3757,59 @@ function renderIncHistorial() {
   const tbody = document.getElementById('inc-hist-tbody');
   if (!tbody) return;
   const filtroEmp = document.getElementById('inc-hist-emp')?.value || '';
-  const registros = filtroEmp
-    ? incRegistros.filter(r => r.empId === filtroEmp)
-    : incRegistros;
+  const registros = filtroEmp ? incRegistros.filter(r => r.empId === filtroEmp) : incRegistros;
 
-  tbody.innerHTML = registros.length ? registros.map(r => `<tr>
-    <td style="font-size:11px;color:var(--text3)">${r.fecha||'—'}</td>
-    <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3)">${r.empId}</td>
-    <td style="font-weight:500;font-size:12px">${r.nombre}</td>
-    <td style="font-size:12px">${r.caso||'—'}</td>
-    <td style="font-size:12px">${r.fechaIni||'—'} al ${r.fechaFin||'—'}</td>
-    <td style="text-align:right;font-family:'DM Mono',monospace">${r.dias}</td>
-    <td style="text-align:right;font-family:'DM Mono',monospace;color:var(--accent)">${fmtMon(r.monto)}</td>
-    <td><span class="badge ${r.pago==='transferencia'?'b-tr':'b-ef'}">${r.pago==='transferencia'?'Transferencia':'Efectivo'}</span></td>
-    <td style="font-size:11px;color:var(--text3)">${r.nota||'—'}</td>
-    <td><button class="btn btn-d" style="font-size:10px;padding:3px 7px" onclick="eliminarIncapacidad('${r.id}')">✕</button></td>
-  </tr>`).join('')
-  : '<tr><td colspan="10" style="text-align:center;color:var(--text3);padding:2rem">Sin registros</td></tr>';
+  const tipoIcon = { incapacidad:'🏥', maternidad:'🤱', goce:'📋' };
+  const tipoNom  = { incapacidad:'Incapacidad', maternidad:'Maternidad', goce:'Goce' };
+
+  tbody.innerHTML = registros.length ? registros.map(r => {
+    const tipo = r.tipo || 'incapacidad';
+    const unidadLbl = tipo === 'incapacidad' ? `${r.dias} día${r.dias!==1?'s':''}` : `${r.dias} sem.`;
+    const ref = tipo === 'incapacidad' ? (r.caso||'—') : tipo === 'goce' ? `${r.pct||'?'}%` : '—';
+    return `<tr>
+      <td style="font-size:11px;color:var(--text3)">${r.fecha||'—'}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3)">${r.empId}</td>
+      <td style="font-weight:500;font-size:12px">${r.nombre}</td>
+      <td style="font-size:12px;white-space:nowrap">${tipoIcon[tipo]||''} ${tipoNom[tipo]||tipo}</td>
+      <td style="font-size:12px;color:var(--text3)">${ref}</td>
+      <td style="font-size:12px">${r.fechaIni||'—'} → ${r.fechaFin||'—'}</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace">${unidadLbl}</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace">${fmtMon(r.bruto||r.monto)}</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace;color:var(--danger)">${r.rebajoCC>0?'-'+fmtMon(r.rebajoCC):'—'}</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace;font-weight:600;color:var(--accent)">${fmtMon(r.monto)}</td>
+      <td><span class="badge ${r.pago==='transferencia'?'b-tr':'b-ef'}">${r.pago==='transferencia'?'Transf.':'Efectivo'}</span></td>
+      <td style="font-size:11px;color:var(--text3)">${r.nota||'—'}</td>
+      <td><button class="btn btn-d" style="font-size:10px;padding:3px 7px" onclick="eliminarIncapacidad('${r.id}')">✕</button></td>
+    </tr>`;
+  }).join('')
+  : '<tr><td colspan="13" style="text-align:center;color:var(--text3);padding:2rem">Sin registros</td></tr>';
 }
 
 function eliminarIncapacidad(id) {
-  if (!confirm('¿Eliminar este registro de incapacidad?')) return;
+  if (!confirm('¿Eliminar este registro?')) return;
   incRegistros = incRegistros.filter(r => r.id !== id);
   try { localStorage.setItem('planilla_inc_registros', JSON.stringify(incRegistros)); } catch(e) {}
   if (accessToken) reescribirIncapacidadesSheets();
   renderIncHistorial();
-  toast('Incapacidad eliminada', 'ok');
+  toast('Registro eliminado', 'ok');
 }
 
 function exportarIncExcel() {
   if (!incRegistros.length) { toast('Sin registros para exportar', 'warn'); return; }
+  const tipoNom = { incapacidad:'Incapacidad CCSS', maternidad:'Lic. Maternidad', goce:'Lic. con Goce' };
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet([
-    ['Fecha Reg.','ID','Empleado','N° Caso','Fecha Ini','Fecha Fin','Días','Monto','Pago','Mes','Nota'],
-    ...incRegistros.map(r => [r.fecha, r.empId, r.nombre, r.caso||'', r.fechaIni, r.fechaFin, r.dias, Math.round(r.monto), r.pago, r.mes||'', r.nota||''])
+    ['Fecha Reg.','ID','Empleado','Tipo','Ref/Caso/%','Fecha Ini','Fecha Fin','Días/Sem','Bruto','CCSS','Neto','Pago','Mes','Nota'],
+    ...incRegistros.map(r => {
+      const tipo = r.tipo||'incapacidad';
+      const ref  = tipo==='incapacidad'?(r.caso||'') : tipo==='goce'?`${r.pct||''}%` : '';
+      return [r.fecha, r.empId, r.nombre, tipoNom[tipo]||tipo, ref,
+              r.fechaIni, r.fechaFin, r.dias, Math.round(r.bruto||r.monto),
+              Math.round(r.rebajoCC||0), Math.round(r.monto), r.pago, r.mes||'', r.nota||''];
+    })
   ]);
-  ws['!cols'] = [{wch:12},{wch:6},{wch:30},{wch:14},{wch:12},{wch:12},{wch:8},{wch:12},{wch:14},{wch:20},{wch:25}];
-  XLSX.utils.book_append_sheet(wb, ws, 'Incapacidades');
+  ws['!cols'] = [{wch:12},{wch:6},{wch:28},{wch:20},{wch:10},{wch:12},{wch:12},{wch:9},{wch:12},{wch:10},{wch:12},{wch:12},{wch:18},{wch:25}];
+  XLSX.utils.book_append_sheet(wb, ws, 'Licencias e Incapacidades');
   XLSX.writeFile(wb, 'Incapacidades_Profecha.xlsx');
 }
 
