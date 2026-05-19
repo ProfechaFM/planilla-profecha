@@ -3037,7 +3037,8 @@ function guardarRebajo() {
   const rebajo = {
     id: Date.now().toString(),
     empId, nombre: emp ? emp.nombre : empId,
-    concepto, total, cuota, pagado: 0, fecha, nota, activo: true
+    concepto, total, cuota, pagado: 0, fecha, nota, activo: true,
+    semanaCalculo: weekKey() // semana en que se aplica la primera cuota
   };
   rebajos.push(rebajo);
   try { localStorage.setItem('planilla_rebajos', JSON.stringify(rebajos)); } catch(e) {}
@@ -3081,7 +3082,7 @@ async function reescribirRebajosSheets() {
     const rows = [['ID_Rebajo','Fecha','ID_Emp','Nombre','Concepto','Total','Cuota','Pagado','Nota','Activo','UltimaSemana']];
     rebajos.forEach(r => rows.push([
       r.id, r.fecha||'', r.empId, r.nombre, r.concepto,
-      r.total, r.cuota, r.pagado, r.nota||'', r.activo ? 'TRUE' : 'FALSE', r.ultimaSemanaAplicada||''
+      r.total, r.cuota, r.pagado, r.nota||'', r.activo ? 'TRUE' : 'FALSE', r.semanaCalculo||''
     ]));
     await sheetsWrite('Rebajos!A1', rows);
   } catch(e) { console.warn('reescribirReb:', e.message); }
@@ -3296,7 +3297,7 @@ function registrarIncapacidad() {
     dias, diasTotales: total || dias,
     monto, pago, mes,
     nota, fecha: fechaReg,
-    pagadoEnSemana: false
+    semanaCalculo: weekKey() // semana en que se paga
   };
 
   incRegistros.unshift(registro);
@@ -3349,7 +3350,7 @@ async function reescribirIncapacidadesSheets() {
                    'Dias_Pagar','Monto','Pago','Mes','Nota','ID_Registro']];
     incRegistros.forEach(r => rows.push([
       r.fecha, r.empId, r.nombre, r.caso||'', r.fechaIni, r.fechaFin,
-      r.dias, Math.round(r.monto), r.pago, r.mes, r.nota||'', r.id
+      r.dias, Math.round(r.monto), r.pago, r.mes, r.nota||'', r.id, r.semanaCalculo||''
     ]));
     await sheetsWrite('Incapacidades!A1', rows);
   } catch(e) { console.warn('reescribirInc:', e.message); }
@@ -3371,16 +3372,14 @@ function exportarIncExcel() {
 function aplicarIncapacidadesAlCalculo() {
   const wk = weekKey();
 
-  // Incluir todas las incapacidades que no hayan sido marcadas como pagadas
-  // Sin CCSS, sin porción de descanso, sin rebajos
+  // Solo incluir incapacidades asignadas a esta semana exacta
   const pendientes = incRegistros.filter(r =>
-    r.monto > 0 && r.pagadoEnSemana !== wk
+    r.monto > 0 && (r.semanaCalculo === wk || (!r.semanaCalculo && !r.pagadoEnSemana))
   );
 
   if (!pendientes.length) return;
 
   const yaAplicados = new Set();
-
   pendientes.forEach(r => {
     if (yaAplicados.has(r.id)) return;
     yaAplicados.add(r.id);
@@ -3397,39 +3396,34 @@ function aplicarIncapacidadesAlCalculo() {
       if (!resultado.incapacidades) resultado.incapacidades = [];
       resultado.incapacidades.push(incItem);
       if (pago === 'transferencia') {
-        resultado.netoTr += montoInc;
-        resultado.incTr = (resultado.incTr || 0) + montoInc;
+        resultado.netoTr += montoInc; resultado.incTr = (resultado.incTr||0) + montoInc;
       } else {
-        resultado.netoEf += montoInc;
-        resultado.incEf = (resultado.incEf || 0) + montoInc;
+        resultado.netoEf += montoInc; resultado.incEf = (resultado.incEf||0) + montoInc;
       }
       resultado.neto += montoInc;
     } else {
       resultados.push({
         emp, empId: r.empId, nombre: emp.nombre,
         hNorm:0, hExtra:0, hDoble:0, hExtraDoble:0,
-        descTotal:0, fijo:0, bruto: montoInc,
-        rebajoCC:0, neto: montoInc,
-        netoEf: pago === 'transferencia' ? 0 : montoInc,
-        netoTr: pago === 'transferencia' ? montoInc : 0,
-        isSplit: false, sinPerfil: false, soloIncapacidad: true,
-        incapacidades: [incItem],
-        incEf: pago === 'transferencia' ? 0 : montoInc,
-        incTr: pago === 'transferencia' ? montoInc : 0,
+        descTotal:0, fijo:0, bruto: montoInc, rebajoCC:0, neto: montoInc,
+        netoEf: pago==='transferencia'?0:montoInc, netoTr: pago==='transferencia'?montoInc:0,
+        isSplit:false, sinPerfil:false, soloIncapacidad:true,
+        incapacidades:[incItem], incEf: pago==='transferencia'?0:montoInc,
+        incTr: pago==='transferencia'?montoInc:0,
       });
     }
-
-    // Marcar como aplicada en esta semana para evitar doble conteo si se recalcula
-    r.pagadoEnSemana = wk;
   });
-
-  try { localStorage.setItem('planilla_inc_registros', JSON.stringify(incRegistros)); } catch(e) {}
 }
 function aplicarRebajosAlCalculo() {
   const semana = weekLabel();
+  const wk = weekKey();
 
   rebajos.filter(r => r.activo).forEach(r => {
-    // Verificar si ya se aplicó esta semana usando el historial
+    // Solo aplicar si la semana de calculo coincide con la semana actual
+    // O si el rebajo no tiene semana asignada (backward compat)
+    if (r.semanaCalculo && r.semanaCalculo !== wk) return;
+
+    // No duplicar si ya está en historial para esta semana
     const yaEnHistorial = rebajosHistorial.some(h => h.rebajoId === r.id && h.semana === semana);
     if (yaEnHistorial) return;
 
@@ -3444,16 +3438,18 @@ function aplicarRebajosAlCalculo() {
     if (resultado.isSplit) {
       resultado.netoTr = Math.max(0, resultado.netoTr - cuotaAplicar);
     } else if (resultado.emp?.pago === 'transferencia') {
-      resultado.netoTr = resultado.neto;
-      resultado.netoEf = 0;
+      resultado.netoTr = resultado.neto; resultado.netoEf = 0;
     } else {
-      resultado.netoEf = resultado.neto;
-      resultado.netoTr = 0;
+      resultado.netoEf = resultado.neto; resultado.netoTr = 0;
     }
     resultado.rebajoRebajo = (resultado.rebajoRebajo || 0) + cuotaAplicar;
 
     r.pagado += cuotaAplicar;
     if (r.pagado >= r.total) r.activo = false;
+    // Avanzar semanaCalculo a la próxima semana para la siguiente cuota
+    const nextWeek = new Date(currentWeekStart);
+    nextWeek.setDate(nextWeek.getDate() + 7);
+    r.semanaCalculo = nextWeek.toISOString().split('T')[0];
 
     const entrada = {
       id: Date.now().toString() + r.id, rebajoId: r.id,
@@ -3467,11 +3463,7 @@ function aplicarRebajosAlCalculo() {
       localStorage.setItem('planilla_rebajos', JSON.stringify(rebajos));
       localStorage.setItem('planilla_rebajos_hist', JSON.stringify(rebajosHistorial));
     } catch(e) {}
-
-    if (accessToken) {
-      actualizarRebajoSheets(r);
-      guardarHistorialRebajoSheets(entrada);
-    }
+    if (accessToken) { actualizarRebajoSheets(r); guardarHistorialRebajoSheets(entrada); }
   });
 }
 
@@ -3773,7 +3765,7 @@ async function cargarRebajosSheets() {
       total: parseFloat(r[5])||0, cuota: parseFloat(r[6])||0,
       pagado: parseFloat(r[7])||0, nota: r[8]||'',
       activo: r[9]!=='FALSE' && r[9]!==false && r[9]!=='0',
-      ultimaSemanaAplicada: r[10]||''
+      semanaCalculo: r[10] || '' // semana en que se aplica la próxima cuota
     });
   }
   rebajos = rbjs;
@@ -3858,7 +3850,7 @@ async function cargarIncapacidadesSheets() {
       mes:        r[9]  || '',
       nota:       r[10] || '',
       id:         r[11] || Date.now().toString(),
-      pagadoEnSemana: null  // null = nunca pagado, se marca con weekKey al calcular
+      semanaCalculo: r[12] || null // semana asignada para el pago
     });
   }
   incRegistros = incs;
@@ -3870,7 +3862,7 @@ async function guardarIncEnSheets(r) {
   try {
     await sheetsAppend('Incapacidades!A1', [[
       r.fecha, r.empId, r.nombre, r.caso||'', r.fechaIni, r.fechaFin,
-      r.dias, Math.round(r.monto), r.pago, r.mes, r.nota||'', r.id
+      r.dias, Math.round(r.monto), r.pago, r.mes, r.nota||'', r.id, r.semanaCalculo||''
     ]]);
   } catch(e) { console.warn('guardarInc:', e.message); }
 }
