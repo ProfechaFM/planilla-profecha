@@ -1368,7 +1368,12 @@ function setHour(empId,day,tipo,val){
 }
 
 // ── Payroll calculation ────────────────────────────────────────────
-function calcularPago(){
+async function calcularPago(){
+  // Refrescar vacaciones, incapacidades y rebajos desde Sheets antes de calcular
+  if (accessToken) {
+    try { await sincronizarDesdeSheets(); } catch(e) { console.warn('Sync pre-cálculo:', e.message); }
+  }
+
   const wk=weekKey();
   const wData=horarioActual[wk]||{};
   resultados=[];
@@ -1388,12 +1393,9 @@ function calcularPago(){
   document.getElementById('m-ccss').textContent=fmtMon(totCCSS);
   document.getElementById('m-neto-ef').textContent=fmtMon(totEf);
   document.getElementById('m-neto-tr').textContent=fmtMon(totTr);
-  aplicarRebajosAlCalculo();
   aplicarVacacionesAlCalculo();
   aplicarIncapacidadesAlCalculo();
   aplicarRebajosAlCalculo();
-  aplicarVacacionesAlCalculo();
-  aplicarIncapacidadesAlCalculo();
   renderCalculo();renderTransferencias();renderBilletes();renderComprobantes();
   toast('Planilla calculada correctamente','ok');
 }
@@ -1428,8 +1430,9 @@ function renderTransferencias(){
   const rows = [];
 
   trItems.forEach(r => {
-    const salarioTr = r.netoTr - (r.vacTr || 0);
     const vacTr = r.vacTr || 0;
+    const incTrSep = r.incTr || 0;
+    const salarioTr = r.netoTr - vacTr - incTrSep;
 
     // Salary row (if has salary transfer)
     if (salarioTr > 0) {
@@ -1612,7 +1615,7 @@ function renderComprobantes(){
       ${r.rebajoCC>0?`<div class="comp-row" style="color:var(--danger)"><span>Rebajo CCSS (${cfg.ccss}%)${r.isSplit?' — solo sobre horas normales':''}</span><span>-${fmtMon(r.rebajoCC)}</span></div>`:''}
       ${r.rebajoRebajo>0?`<div class="comp-row" style="color:var(--danger)"><span>Rebajo préstamo / daño</span><span>-${fmtMon(r.rebajoRebajo)}</span></div>`:''}
       <div class="comp-total"><span>SALARIO NETO</span><span>${fmtMon(r.neto)}</span></div>
-      ${r.isSplit?`<div style="margin-top:3px;padding:3px 6px;background:var(--warn-l);border-radius:4px;font-size:10px"><strong>Desglose:</strong> Transferencia: ${fmtMon((r.netoTr||0)-(r.vacTr||0))} · Efectivo: ${fmtMon((r.netoEf||0)-(r.vacEf||0))}</div>`:''}
+      ${r.isSplit?`<div style="margin-top:3px;padding:3px 6px;background:var(--warn-l);border-radius:4px;font-size:10px"><strong>Desglose:</strong> Transferencia: ${fmtMon((r.netoTr||0)-(r.vacTr||0)-(r.incTr||0))} · Efectivo: ${fmtMon((r.netoEf||0)-(r.vacEf||0)-(r.incEf||0))}</div>`:''}
       ${r.vacaciones&&r.vacaciones.length?`<div style="margin-top:3px;padding:4px 6px;background:#fef3c7;border-radius:4px;font-size:10px;border-left:3px solid #b7791f"><strong style="color:#92400e">Vacaciones:</strong> ${r.vacaciones.map(v=>`${v.dias} día${v.dias!==1?'s':''} · ${fmtMon(v.monto)} (${v.pago==='transferencia'?'Transfer':'Efectivo'})${v.periodo?' · '+v.periodo:''}`).join(' | ')}</div>`:''}
       ${r.incapacidades&&r.incapacidades.length?`<div style="margin-top:3px;padding:4px 6px;background:#e0f2fe;border-radius:4px;font-size:10px;border-left:3px solid #0369a1"><strong style="color:#0369a1">Incapacidad:</strong> ${r.incapacidades.map(i=>`${i.dias} día${i.dias!==1?'s':''} × 4h · ${fmtMon(i.monto)}${i.caso?' · Caso: '+i.caso:''}`).join(' | ')}</div>`:''}
       <div class="comp-firma">
@@ -2384,6 +2387,9 @@ function recalcularSilencioso(){
   document.getElementById('m-ccss').textContent=fmtMon(totCCSS);
   document.getElementById('m-neto-ef').textContent=fmtMon(totEf);
   document.getElementById('m-neto-tr').textContent=fmtMon(totTr);
+  aplicarVacacionesAlCalculo();
+  aplicarIncapacidadesAlCalculo();
+  aplicarRebajosAlCalculo();
   renderCalculo();renderTransferencias();renderBilletes();renderComprobantes();
   const ind=document.getElementById('recalc-indicator');
   if(ind){ind.textContent='↻ Actualizado';ind.style.opacity='1';setTimeout(()=>ind.style.opacity='0',2000);}
@@ -2660,6 +2666,8 @@ let FECHAS_INGRESO = {};
 let vacRegistros = [];
 // ajustes iniciales manuales: {empId: {canceladas:N, disfrutadas:N}}
 let vacAjustes = {};
+// incapacidades: array de registros
+let incRegistros = [];
 
 function vacDiasGanados(empId) {
   const fechaStr = FECHAS_INGRESO[empId];
@@ -3133,7 +3141,7 @@ function aplicarVacacionesAlCalculo() {
   const grupos = new Set();
   vacRegistros.filter(r =>
     r.tipo === 'cancelada' && r.monto > 0 &&
-    (r.semanaCalculo === wk || !r.semanaCalculo)
+    r.semanaCalculo === wk
   ).forEach(r => {
     const key = r.grupoId || r.id;
     if (grupos.has(key)) return;
@@ -3162,7 +3170,7 @@ function aplicarIncapacidadesAlCalculo() {
   const wk = weekKey();
   const vistos = new Set();
   incRegistros.filter(r =>
-    r.monto > 0 && (r.semanaCalculo === wk || !r.semanaCalculo)
+    r.monto > 0 && r.semanaCalculo === wk
   ).forEach(r => {
     if (vistos.has(r.id)) return;
     vistos.add(r.id);
@@ -3478,6 +3486,180 @@ function reabrirConstanciaById(grupoId) {
   const win = window.open('','_blank','width=850,height=700');
   if (!win) { toast('Permitir ventanas emergentes','warn'); return; }
   win.document.open(); win.document.write(html); win.document.close();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// INCAPACIDADES — funciones UI (tab, form, historial, export)
+// ══════════════════════════════════════════════════════════════════
+
+function incTab(tab) {
+  ['registrar','historial'].forEach(t => {
+    const content = document.getElementById('inc-tab-'+t+'-content');
+    const btn = document.getElementById('inc-tab-'+t);
+    if (content) content.style.display = t === tab ? '' : 'none';
+    if (btn) {
+      btn.className = t === tab ? 'btn btn-p' : 'btn btn-s';
+      btn.style.cssText = 'border-radius:6px 6px 0 0;border-bottom:none;font-size:12px';
+    }
+  });
+  if (tab === 'historial') { poblarIncHistEmpSelect(); renderIncHistorial(); }
+  if (tab === 'registrar') poblarIncEmpSelect();
+}
+
+function poblarIncEmpSelect() {
+  const sel = document.getElementById('inc-emp');
+  if (!sel) return;
+  const actual = sel.value;
+  sel.innerHTML = '<option value="">Seleccionar...</option>' +
+    empleados.filter(e => e.id !== '999').map(e =>
+      `<option value="${e.id}"${e.id === actual ? ' selected' : ''}>${e.id} — ${e.nombre}</option>`
+    ).join('');
+}
+
+function poblarIncHistEmpSelect() {
+  const sel = document.getElementById('inc-hist-emp');
+  if (!sel) return;
+  const actual = sel.value;
+  sel.innerHTML = '<option value="">Todos los empleados</option>' +
+    empleados.filter(e => e.id !== '999').map(e =>
+      `<option value="${e.id}"${e.id === actual ? ' selected' : ''}>${e.nombre}</option>`
+    ).join('');
+}
+
+function actualizarPreviewInc() {
+  const empId = document.getElementById('inc-emp')?.value;
+  const fechaIni = document.getElementById('inc-fecha-ini')?.value || '';
+  const fechaFin = document.getElementById('inc-fecha-fin')?.value || '';
+  const diasDisplay = document.getElementById('inc-dias-display');
+  const diasInput = document.getElementById('inc-dias');
+  const preview = document.getElementById('inc-preview');
+
+  if (!empId || !fechaIni || !fechaFin) {
+    if (diasDisplay) diasDisplay.textContent = '— días';
+    if (preview) preview.style.display = 'none';
+    return;
+  }
+
+  const emp = empleados.find(e => e.id === empId);
+  if (!emp) return;
+
+  // Días corridos entre fechas
+  const ini = new Date(fechaIni + 'T12:00:00');
+  const fin = new Date(fechaFin + 'T12:00:00');
+  if (ini > fin) { if (diasDisplay) diasDisplay.textContent = '— días'; return; }
+  const diasTotales = Math.round((fin - ini) / (1000*60*60*24)) + 1;
+
+  // Máximo 3 días por mes
+  const diasPagar = Math.min(diasTotales, 3);
+  const monto = (parseFloat(emp.horaBase) || 0) * 4 * diasPagar;
+  const mes = ini.toLocaleDateString('es-CR', { month: 'long', year: 'numeric' });
+
+  if (diasDisplay) {
+    diasDisplay.textContent = `${diasPagar} día${diasPagar !== 1 ? 's' : ''} a pagar${diasTotales > 3 ? ' (máx. 3 de '+diasTotales+' corridos)' : ''}`;
+    diasDisplay.style.color = 'var(--accent)';
+  }
+  if (diasInput) diasInput.value = diasPagar;
+
+  if (preview) {
+    preview.style.display = '';
+    preview.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem">
+        <div><div style="font-size:11px;color:var(--text3)">Empleado</div><div style="font-weight:600">${emp.nombre}</div></div>
+        <div><div style="font-size:11px;color:var(--text3)">Período</div><div style="font-weight:600">${fechaIni} al ${fechaFin}</div></div>
+        <div><div style="font-size:11px;color:var(--text3)">Mes</div><div style="font-weight:600">${mes}</div></div>
+        <div><div style="font-size:11px;color:var(--text3)">Días a pagar</div><div style="font-weight:700;color:var(--accent)">${diasPagar}</div></div>
+        <div><div style="font-size:11px;color:var(--text3)">Monto (4h/día)</div><div style="font-weight:700;color:var(--accent);font-family:'DM Mono',monospace">${fmtMon(monto)}</div></div>
+        <div><div style="font-size:11px;color:var(--text3)">Forma de pago</div><div style="font-weight:600">${emp.pago === 'transferencia' ? 'Transferencia' : 'Efectivo'}</div></div>
+      </div>`;
+  }
+}
+
+function registrarIncapacidad() {
+  const empId = document.getElementById('inc-emp')?.value;
+  const caso = document.getElementById('inc-caso')?.value.trim() || '';
+  const fechaIni = document.getElementById('inc-fecha-ini')?.value || '';
+  const fechaFin = document.getElementById('inc-fecha-fin')?.value || '';
+  const nota = document.getElementById('inc-nota')?.value.trim() || '';
+  const diasPagar = parseInt(document.getElementById('inc-dias')?.value) || 0;
+
+  if (!empId) { toast('Seleccioná un empleado', 'warn'); return; }
+  if (!fechaIni || !fechaFin) { toast('Ingresá las fechas de la incapacidad', 'warn'); return; }
+  if (diasPagar < 1) { toast('Sin días a pagar — revisá las fechas', 'warn'); return; }
+
+  const emp = empleados.find(e => e.id === empId);
+  if (!emp) return;
+
+  const monto = (parseFloat(emp.horaBase) || 0) * 4 * diasPagar;
+  const pago = emp.pago || 'efectivo';
+  const ini = new Date(fechaIni + 'T12:00:00');
+  const mes = ini.toLocaleDateString('es-CR', { month: 'long', year: 'numeric' });
+  const fechaHoy = new Date().toISOString().split('T')[0];
+
+  const registro = {
+    id: Date.now().toString(),
+    fecha: fechaHoy, empId, nombre: emp.nombre,
+    caso, fechaIni, fechaFin,
+    dias: diasPagar, monto, pago, mes, nota,
+    semanaCalculo: weekKey()
+  };
+
+  incRegistros.unshift(registro);
+  try { localStorage.setItem('planilla_inc_registros', JSON.stringify(incRegistros)); } catch(e) {}
+  if (accessToken) guardarIncEnSheets(registro);
+
+  toast(`Incapacidad registrada — ${diasPagar} día${diasPagar!==1?'s':''} · ${fmtMon(monto)}`, 'ok');
+
+  // Limpiar form
+  ['inc-caso','inc-nota','inc-fecha-ini','inc-fecha-fin'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  const dd = document.getElementById('inc-dias-display'); if (dd) dd.textContent = '— días';
+  const di = document.getElementById('inc-dias'); if (di) di.value = 0;
+  const pv = document.getElementById('inc-preview'); if (pv) pv.style.display = 'none';
+}
+
+function renderIncHistorial() {
+  const tbody = document.getElementById('inc-hist-tbody');
+  if (!tbody) return;
+  const filtroEmp = document.getElementById('inc-hist-emp')?.value || '';
+  const registros = filtroEmp
+    ? incRegistros.filter(r => r.empId === filtroEmp)
+    : incRegistros;
+
+  tbody.innerHTML = registros.length ? registros.map(r => `<tr>
+    <td style="font-size:11px;color:var(--text3)">${r.fecha||'—'}</td>
+    <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3)">${r.empId}</td>
+    <td style="font-weight:500;font-size:12px">${r.nombre}</td>
+    <td style="font-size:12px">${r.caso||'—'}</td>
+    <td style="font-size:12px">${r.fechaIni||'—'} al ${r.fechaFin||'—'}</td>
+    <td style="text-align:right;font-family:'DM Mono',monospace">${r.dias}</td>
+    <td style="text-align:right;font-family:'DM Mono',monospace;color:var(--accent)">${fmtMon(r.monto)}</td>
+    <td><span class="badge ${r.pago==='transferencia'?'b-tr':'b-ef'}">${r.pago==='transferencia'?'Transferencia':'Efectivo'}</span></td>
+    <td style="font-size:11px;color:var(--text3)">${r.nota||'—'}</td>
+    <td><button class="btn btn-d" style="font-size:10px;padding:3px 7px" onclick="eliminarIncapacidad('${r.id}')">✕</button></td>
+  </tr>`).join('')
+  : '<tr><td colspan="10" style="text-align:center;color:var(--text3);padding:2rem">Sin registros</td></tr>';
+}
+
+function eliminarIncapacidad(id) {
+  if (!confirm('¿Eliminar este registro de incapacidad?')) return;
+  incRegistros = incRegistros.filter(r => r.id !== id);
+  try { localStorage.setItem('planilla_inc_registros', JSON.stringify(incRegistros)); } catch(e) {}
+  if (accessToken) reescribirIncapacidadesSheets();
+  renderIncHistorial();
+  toast('Incapacidad eliminada', 'ok');
+}
+
+function exportarIncExcel() {
+  if (!incRegistros.length) { toast('Sin registros para exportar', 'warn'); return; }
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([
+    ['Fecha Reg.','ID','Empleado','N° Caso','Fecha Ini','Fecha Fin','Días','Monto','Pago','Mes','Nota'],
+    ...incRegistros.map(r => [r.fecha, r.empId, r.nombre, r.caso||'', r.fechaIni, r.fechaFin, r.dias, Math.round(r.monto), r.pago, r.mes||'', r.nota||''])
+  ]);
+  ws['!cols'] = [{wch:12},{wch:6},{wch:30},{wch:14},{wch:12},{wch:12},{wch:8},{wch:12},{wch:14},{wch:20},{wch:25}];
+  XLSX.utils.book_append_sheet(wb, ws, 'Incapacidades');
+  XLSX.writeFile(wb, 'Incapacidades_Profecha.xlsx');
 }
 
 </script>
