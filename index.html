@@ -1002,8 +1002,9 @@ tr:hover td{background:var(--bg)}
 </main>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
 <script>
+document.addEventListener("DOMContentLoaded", function() {
 // ── Utilities (defined first — used throughout) ──────────────────
 function debounce(fn,ms=400){let tid;return(...args)=>{clearTimeout(tid);tid=setTimeout(()=>fn(...args),ms);};}
 const MESES_ES=['ene','feb','mar','abr','may','jun','jul','ago','set','oct','nov','dic'];
@@ -3475,4 +3476,7 @@ function reabrirConstanciaById(grupoId) {
   win.document.open(); win.document.write(html); win.document.close();
 }
 
-
+}); // DOMContentLoaded
+</script>
+</body>
+</html>
