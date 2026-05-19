@@ -1386,6 +1386,9 @@ function calcularPago(){
   aplicarRebajosAlCalculo();
   aplicarVacacionesAlCalculo();
   aplicarIncapacidadesAlCalculo();
+  aplicarRebajosAlCalculo();
+  aplicarVacacionesAlCalculo();
+  aplicarIncapacidadesAlCalculo();
   renderCalculo();renderTransferencias();renderBilletes();renderComprobantes();
   toast('Planilla calculada correctamente','ok');
 }
@@ -2776,6 +2779,53 @@ function poblarVacHistEmp() {
     ).join('');
 }
 
+// ══════════════════════════════════════════════════════════════════
+// VACACIONES — funciones de formulario
+// ══════════════════════════════════════════════════════════════════
+
+// Todos los días corridos (restaurante trabaja cualquier día)
+function calcularDiasHabiles(ini_str, fin_str) {
+  if (!ini_str || !fin_str) return 0;
+  const ini = new Date(ini_str + 'T12:00:00');
+  const fin = new Date(fin_str + 'T12:00:00');
+  if (ini > fin) return 0;
+  return Math.round((fin - ini) / (1000 * 60 * 60 * 24)) + 1;
+}
+
+// Genera períodos anuales según fecha de ingreso del empleado
+function vacPeriodosDisponibles(empId) {
+  const fechaStr = FECHAS_INGRESO[empId];
+  if (!fechaStr) return [];
+  const ingreso = new Date(fechaStr + 'T12:00:00');
+  const hoy = new Date();
+  const periodos = [];
+  let anioInicio = ingreso.getFullYear();
+  while (anioInicio <= hoy.getFullYear() + 1) {
+    const inicio = new Date(anioInicio, ingreso.getMonth(), ingreso.getDate());
+    if (inicio > hoy) break;
+    periodos.push({
+      label: `${anioInicio} \u2014 ${anioInicio + 1}`,
+      value: `${anioInicio}-${anioInicio + 1}`
+    });
+    anioInicio++;
+  }
+  return periodos.reverse();
+}
+
+function poblarVacPeriodos(empId) {
+  const sel = document.getElementById('vac-periodo');
+  if (!sel) return;
+  const periodos = vacPeriodosDisponibles(empId);
+  if (!periodos.length) {
+    sel.innerHTML = '<option value="">Sin fecha de ingreso — conectate a Sheets primero</option>';
+    return;
+  }
+  sel.innerHTML = periodos.map((p, i) =>
+    `<option value="${p.value}"${i === 0 ? ' selected' : ''}>${p.label}</option>`
+  ).join('');
+}
+
+
 function actualizarPreviewVac() {
   const empId = document.getElementById('vac-emp')?.value;
   const tipo = document.getElementById('vac-tipo')?.value;
@@ -3075,394 +3125,178 @@ function eliminarRebajo(id) {
 // y los suma al resultado del empleado para esa semana
 function aplicarVacacionesAlCalculo() {
   const wk = weekKey();
-  const gruposAplicados = new Set();
-
-  // Solo canceladas cuya semanaCalculo == semana actual
-  // Si no tiene semanaCalculo (registro viejo), aplicar esta semana
-  const pendientes = vacRegistros.filter(r =>
+  const grupos = new Set();
+  vacRegistros.filter(r =>
     r.tipo === 'cancelada' && r.monto > 0 &&
-    (r.semanaCalculo === wk || (!r.semanaCalculo))
-  );
-
-  pendientes.forEach(r => {
-    // Deduplicar grupos (ambas = disfrutada + cancelada del mismo evento)
+    (r.semanaCalculo === wk || !r.semanaCalculo)
+  ).forEach(r => {
     const key = r.grupoId || r.id;
-    if (gruposAplicados.has(key)) return;
-    gruposAplicados.add(key);
-
-    const resultado = resultados.find(res => res.empId === r.empId);
+    if (grupos.has(key)) return;
+    grupos.add(key);
     const emp = empleados.find(e => e.id === r.empId);
     if (!emp) return;
-
-    const montoVac = r.monto;
     const pago = r.pago || emp.pago || 'efectivo';
-    const vacItem = {
-      dias: r.dias, monto: montoVac, pago,
-      periodo: r.periodoLabel || r.periodo || '',
-      registroId: r.id, grupoId: r.grupoId
-    };
-
-    if (resultado) {
-      if (!resultado.vacaciones) resultado.vacaciones = [];
-      resultado.vacaciones.push(vacItem);
-      if (pago === 'transferencia') {
-        resultado.netoTr += montoVac;
-        resultado.vacTr = (resultado.vacTr||0) + montoVac;
-      } else {
-        resultado.netoEf += montoVac;
-        resultado.vacEf = (resultado.vacEf||0) + montoVac;
-      }
-      resultado.neto += montoVac;
+    const item = { dias: r.dias, monto: r.monto, pago, periodo: r.periodoLabel||r.periodo||'', registroId: r.id, grupoId: r.grupoId };
+    const res = resultados.find(x => x.empId === r.empId);
+    if (res) {
+      if (!res.vacaciones) res.vacaciones = [];
+      res.vacaciones.push(item);
+      if (pago === 'transferencia') { res.netoTr += r.monto; res.vacTr = (res.vacTr||0) + r.monto; }
+      else { res.netoEf += r.monto; res.vacEf = (res.vacEf||0) + r.monto; }
+      res.neto += r.monto;
     } else {
-      resultados.push({
-        emp, empId: r.empId, nombre: emp.nombre,
-        hNorm:0, hExtra:0, hDoble:0, hExtraDoble:0,
-        descTotal:0, fijo:0, bruto:montoVac,
-        rebajoCC:0, neto:montoVac,
-        netoEf: pago==='transferencia'?0:montoVac,
-        netoTr: pago==='transferencia'?montoVac:0,
-        isSplit:false, sinPerfil:false, soloVacaciones:true,
-        vacaciones:[vacItem],
-        vacEf: pago==='transferencia'?0:montoVac,
-        vacTr: pago==='transferencia'?montoVac:0,
-      });
+      resultados.push({ emp, empId: r.empId, nombre: emp.nombre, hNorm:0,hExtra:0,hDoble:0,hExtraDoble:0, descTotal:0,fijo:0, bruto:r.monto, rebajoCC:0, neto:r.monto,
+        netoEf: pago==='transferencia'?0:r.monto, netoTr: pago==='transferencia'?r.monto:0,
+        isSplit:false, sinPerfil:false, soloVacaciones:true, vacaciones:[item],
+        vacEf: pago==='transferencia'?0:r.monto, vacTr: pago==='transferencia'?r.monto:0 });
     }
   });
 }
 
-
-// ══════════════════════════════════════════════════════════════════
-// INCAPACIDADES
-// ══════════════════════════════════════════════════════════════════
-let incRegistros = [];
-
-function incTab(tab) {
-  ['registrar','historial'].forEach(t => {
-    document.getElementById('inc-tab-'+t+'-content').style.display = t === tab ? '' : 'none';
-    document.getElementById('inc-tab-'+t).className = t === tab ? 'btn btn-p' : 'btn btn-s';
-    document.getElementById('inc-tab-'+t).style.cssText = 'border-radius:6px 6px 0 0;border-bottom:none;font-size:12px';
-  });
-  if (tab === 'historial') { renderIncHistorial(); poblarIncHistEmp(); }
-  if (tab === 'registrar') poblarIncEmpSelect();
-}
-
-function poblarIncEmpSelect() {
-  const sel = document.getElementById('inc-emp');
-  if (!sel) return;
-  const actual = sel.value;
-  sel.innerHTML = '<option value="">Seleccionar...</option>' +
-    empleados.filter(e => e.id !== '999').map(e =>
-      `<option value="${e.id}"${e.id === actual ? ' selected' : ''}>${e.id} — ${e.nombre}</option>`
-    ).join('');
-}
-
-function poblarIncHistEmp() {
-  const sel = document.getElementById('inc-hist-emp');
-  if (!sel) return;
-  const actual = sel.value;
-  sel.innerHTML = '<option value="">Todos los empleados</option>' +
-    empleados.filter(e => e.id !== '999').map(e =>
-      `<option value="${e.id}"${e.id === actual ? ' selected' : ''}>${e.nombre}</option>`
-    ).join('');
-}
-
-// Calcular días incapacitados en el rango dado, respetando límite mensual
-function calcDiasIncapacidad(empId, fechaIniStr, fechaFinStr) {
-  if (!fechaIniStr || !fechaFinStr) return { dias: 0, advertencia: '' };
-  const ini = new Date(fechaIniStr + 'T12:00:00');
-  const fin = new Date(fechaFinStr + 'T12:00:00');
-  if (ini > fin) return { dias: 0, advertencia: 'La fecha inicio debe ser anterior a la fecha fin' };
-
-  // Contar días totales del período (incluyendo fines de semana — la CCSS los cuenta)
-  let totalDias = Math.round((fin - ini) / (1000 * 60 * 60 * 24)) + 1;
-
-  // Verificar días ya usados este mes por este empleado
-  const mes = ini.getFullYear() + '-' + String(ini.getMonth() + 1).padStart(2, '0');
-  const diasUsadosMes = incRegistros
-    .filter(r => r.empId === empId && r.mes === mes)
-    .reduce((s, r) => s + r.dias, 0);
-
-  const disponiblesMes = Math.max(0, 3 - diasUsadosMes);
-  const diasPagar = Math.min(totalDias, disponiblesMes, 3);
-  let advertencia = '';
-
-  if (totalDias > 3) {
-    advertencia = `El período tiene ${totalDias} días pero el máximo por mes es 3. Se pagarán ${diasPagar}.`;
-  } else if (diasUsadosMes > 0) {
-    advertencia = `Ya usó ${diasUsadosMes} día(s) este mes. Puede usar ${disponiblesMes} más.`;
-    if (diasPagar < totalDias) advertencia += ` Solo se pagarán ${diasPagar} de ${totalDias} días.`;
-  }
-  if (diasPagar === 0) advertencia = `⚠ Ya usó los 3 días del mes ${mes}. No se puede registrar más.`;
-
-  return { dias: diasPagar, total: totalDias, diasUsadosMes, disponiblesMes, mes, advertencia };
-}
-
-function actualizarPreviewInc() {
-  const empId = document.getElementById('inc-emp')?.value;
-  const fechaIni = document.getElementById('inc-fecha-ini')?.value || '';
-  const fechaFin = document.getElementById('inc-fecha-fin')?.value || '';
-  const display = document.getElementById('inc-dias-display');
-  const diasInput = document.getElementById('inc-dias');
-  const preview = document.getElementById('inc-preview');
-
-  if (!empId || !fechaIni || !fechaFin) {
-    if (display) { display.textContent = '— días'; display.style.color = 'var(--text3)'; }
-    if (preview) preview.style.display = 'none';
-    return;
-  }
-
-  const emp = empleados.find(e => e.id === empId);
-  if (!emp) return;
-
-  const { dias, total, diasUsadosMes, disponiblesMes, mes, advertencia } = calcDiasIncapacidad(empId, fechaIni, fechaFin);
-  if (diasInput) diasInput.value = dias;
-
-  if (display) {
-    display.textContent = dias > 0 ? `${dias} día${dias !== 1 ? 's' : ''} a pagar` : '0 días';
-    display.style.color = dias > 0 ? 'var(--accent)' : 'var(--danger)';
-  }
-
-  const horaBase = parseFloat(emp.horaBase) || 0;
-  const monto = horaBase * 4 * dias; // 4 horas por día
-  const pago = emp.pago || 'efectivo';
-
-  preview.style.display = '';
-  preview.innerHTML = `
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem">
-      <div><div style="font-size:11px;color:var(--text3)">Empleado</div><div style="font-weight:600">${emp.nombre}</div></div>
-      <div><div style="font-size:11px;color:var(--text3)">Período</div><div style="font-weight:600">${fechaIni} al ${fechaFin}</div></div>
-      <div><div style="font-size:11px;color:var(--text3)">Días incapacitados</div><div style="font-weight:600">${total || dias} días (${dias} a pagar)</div></div>
-      <div><div style="font-size:11px;color:var(--text3)">Cálculo</div><div style="font-family:'DM Mono',monospace">${fmtMon(horaBase)} × 4h × ${dias} días</div></div>
-      <div><div style="font-size:11px;color:var(--text3)">Monto (sin CCSS)</div><div style="font-weight:700;color:var(--accent);font-family:'DM Mono',monospace">${fmtMon(monto)}</div></div>
-      <div><div style="font-size:11px;color:var(--text3)">Forma de pago</div><div style="font-weight:600">${pago === 'transferencia' ? 'Transferencia' : 'Efectivo'}</div></div>
-      <div style="grid-column:1/-1;border-top:1px solid var(--border);padding-top:.5rem">
-        <div style="font-size:12px;color:var(--text3)">Uso del mes ${mes||''}:</div>
-        <div style="font-size:12px">Ya usados: <strong>${diasUsadosMes||0}/3</strong> → tras este registro: <strong>${(diasUsadosMes||0)+dias}/3</strong></div>
-        ${advertencia ? `<div style="font-size:12px;color:var(--warn-d);margin-top:4px">⚠ ${advertencia}</div>` : ''}
-      </div>
-    </div>`;
-}
-
-function registrarIncapacidad() {
-  const empId = document.getElementById('inc-emp')?.value;
-  const caso = document.getElementById('inc-caso')?.value.trim() || '';
-  const fechaIni = document.getElementById('inc-fecha-ini')?.value || '';
-  const fechaFin = document.getElementById('inc-fecha-fin')?.value || '';
-  const nota = document.getElementById('inc-nota')?.value || '';
-
-  if (!empId) { toast('Seleccioná un empleado', 'warn'); return; }
-  if (!fechaIni || !fechaFin) { toast('Ingresá las fechas de incapacidad', 'warn'); return; }
-
-  const emp = empleados.find(e => e.id === empId);
-  if (!emp) return;
-
-  const { dias, total, mes, advertencia } = calcDiasIncapacidad(empId, fechaIni, fechaFin);
-
-  if (dias <= 0) { toast('Sin días disponibles para pagar este mes', 'warn'); return; }
-
-  if (advertencia && !confirm(advertencia + '\n\n¿Registrar de todas formas?')) return;
-
-  const horaBase = parseFloat(emp.horaBase) || 0;
-  const monto = horaBase * 4 * dias;
-  const pago = emp.pago || 'efectivo';
-  const fechaReg = new Date().toISOString().split('T')[0];
-
-  const registro = {
-    id: Date.now().toString(),
-    empId, nombre: emp.nombre,
-    caso, fechaIni, fechaFin,
-    dias, diasTotales: total || dias,
-    monto, pago, mes,
-    nota, fecha: fechaReg,
-    semanaCalculo: weekKey() // semana en que se paga
-  };
-
-  incRegistros.unshift(registro);
-  try { localStorage.setItem('planilla_inc_registros', JSON.stringify(incRegistros)); } catch(e) {}
-  if (accessToken) guardarIncEnSheets(registro);
-
-  toast(`Incapacidad registrada — ${dias} días · ${fmtMon(monto)}`, 'ok');
-
-  // Clear form
-  ['inc-caso','inc-nota'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
-  ['inc-fecha-ini','inc-fecha-fin'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
-  document.getElementById('inc-preview').style.display = 'none';
-  document.getElementById('inc-dias-display').textContent = '— días';
-}
-
-// guardarIncEnSheets moved to sync module
-
-function renderIncHistorial() {
-  const filtroEmp = document.getElementById('inc-hist-emp')?.value || '';
-  const registros = filtroEmp ? incRegistros.filter(r => r.empId === filtroEmp) : incRegistros;
-  const tbody = document.getElementById('inc-hist-tbody');
-  tbody.innerHTML = registros.length ? registros.map(r => `<tr>
-    <td style="font-size:11px;color:var(--text3)">${r.fecha}</td>
-    <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3)">${r.empId}</td>
-    <td style="font-weight:500;font-size:12px">${r.nombre}</td>
-    <td style="font-family:'DM Mono',monospace;font-size:11px">${r.caso||'—'}</td>
-    <td style="font-size:11px;color:var(--text3)">${r.fechaIni} → ${r.fechaFin}</td>
-    <td style="text-align:right;font-family:'DM Mono',monospace">${r.dias}${r.diasTotales>r.dias?` <span style="font-size:10px;color:var(--text3)">(de ${r.diasTotales})</span>`:''}
-    </td>
-    <td style="text-align:right;font-family:'DM Mono',monospace;color:var(--accent)">${fmtMon(r.monto)}</td>
-    <td>${r.pago === 'transferencia' ? 'Transf' : 'Efectivo'}</td>
-    <td style="font-size:11px;color:var(--text3)">${r.nota||'—'}</td>
-    <td><button class="btn btn-d" style="font-size:10px;padding:2px 7px" onclick="eliminarInc('${r.id}')">✕</button></td>
-  </tr>`).join('')
-  : '<tr><td colspan="10" style="text-align:center;color:var(--text3);padding:2rem">Sin registros</td></tr>';
-}
-
-function eliminarInc(id) {
-  if (!confirm('¿Eliminar este registro de incapacidad?')) return;
-  incRegistros = incRegistros.filter(r => r.id !== id);
-  try { localStorage.setItem('planilla_inc_registros', JSON.stringify(incRegistros)); } catch(e) {}
-  if (accessToken) reescribirIncapacidadesSheets();
-  renderIncHistorial();
-  toast('Registro eliminado', 'ok');
-}
-
-
-
-function exportarIncExcel() {
-  if (!incRegistros.length) { toast('Sin registros para exportar', 'warn'); return; }
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet([
-    ['Fecha reg.','ID','Empleado','N° Caso','Fecha inicio','Fecha fin','Días pagados','Monto','Pago','Mes','Nota'],
-    ...incRegistros.map(r => [r.fecha, r.empId, r.nombre, r.caso||'', r.fechaIni, r.fechaFin, r.dias, Math.round(r.monto), r.pago, r.mes, r.nota||''])
-  ]);
-  ws['!cols'] = [{wch:12},{wch:6},{wch:28},{wch:14},{wch:12},{wch:12},{wch:8},{wch:12},{wch:12},{wch:8},{wch:25}];
-  XLSX.utils.book_append_sheet(wb, ws, 'Incapacidades');
-  XLSX.writeFile(wb, 'Incapacidades_Profecha.xlsx');
-}
-
-// Aplicar incapacidades al cálculo de la semana
 function aplicarIncapacidadesAlCalculo() {
   const wk = weekKey();
-  const yaAplicados = new Set();
-
-  // Solo incapacidades cuya semanaCalculo coincide con la semana actual
-  // Si no tiene semanaCalculo (registro viejo), aplicar esta semana
-  const pendientes = incRegistros.filter(r =>
-    r.monto > 0 && (r.semanaCalculo === wk || (!r.semanaCalculo))
-  );
-
-  pendientes.forEach(r => {
-    if (yaAplicados.has(r.id)) return;
-    yaAplicados.add(r.id);
-
-    const resultado = resultados.find(res => res.empId === r.empId);
+  const vistos = new Set();
+  incRegistros.filter(r =>
+    r.monto > 0 && (r.semanaCalculo === wk || !r.semanaCalculo)
+  ).forEach(r => {
+    if (vistos.has(r.id)) return;
+    vistos.add(r.id);
     const emp = empleados.find(e => e.id === r.empId);
     if (!emp) return;
-
-    const montoInc = r.monto;
     const pago = r.pago || emp.pago || 'efectivo';
-    const incItem = {
-      dias: r.dias, monto: montoInc, pago,
-      caso: r.caso||'', registroId: r.id
-    };
-
-    if (resultado) {
-      if (!resultado.incapacidades) resultado.incapacidades = [];
-      resultado.incapacidades.push(incItem);
-      if (pago === 'transferencia') {
-        resultado.netoTr += montoInc;
-        resultado.incTr = (resultado.incTr||0) + montoInc;
-      } else {
-        resultado.netoEf += montoInc;
-        resultado.incEf = (resultado.incEf||0) + montoInc;
-      }
-      resultado.neto += montoInc;
+    const item = { dias: r.dias, monto: r.monto, pago, caso: r.caso||'', registroId: r.id };
+    const res = resultados.find(x => x.empId === r.empId);
+    if (res) {
+      if (!res.incapacidades) res.incapacidades = [];
+      res.incapacidades.push(item);
+      if (pago === 'transferencia') { res.netoTr += r.monto; res.incTr = (res.incTr||0) + r.monto; }
+      else { res.netoEf += r.monto; res.incEf = (res.incEf||0) + r.monto; }
+      res.neto += r.monto;
     } else {
-      resultados.push({
-        emp, empId: r.empId, nombre: emp.nombre,
-        hNorm:0, hExtra:0, hDoble:0, hExtraDoble:0,
-        descTotal:0, fijo:0, bruto:montoInc,
-        rebajoCC:0, neto:montoInc,
-        netoEf: pago==='transferencia'?0:montoInc,
-        netoTr: pago==='transferencia'?montoInc:0,
-        isSplit:false, sinPerfil:false, soloIncapacidad:true,
-        incapacidades:[incItem],
-        incEf: pago==='transferencia'?0:montoInc,
-        incTr: pago==='transferencia'?montoInc:0,
-      });
+      resultados.push({ emp, empId: r.empId, nombre: emp.nombre, hNorm:0,hExtra:0,hDoble:0,hExtraDoble:0, descTotal:0,fijo:0, bruto:r.monto, rebajoCC:0, neto:r.monto,
+        netoEf: pago==='transferencia'?0:r.monto, netoTr: pago==='transferencia'?r.monto:0,
+        isSplit:false, sinPerfil:false, soloIncapacidad:true, incapacidades:[item],
+        incEf: pago==='transferencia'?0:r.monto, incTr: pago==='transferencia'?r.monto:0 });
     }
   });
 }
 
-// ══════════════════════════════════════════════════════════════════
-// REBAJOS — aplicar al cálculo
-// ══════════════════════════════════════════════════════════════════
 function aplicarRebajosAlCalculo() {
   const semana = weekLabel();
   const wk = weekKey();
-
   rebajos.filter(r => r.activo).forEach(r => {
-    const semCalc = r.semanaCalculo || wk;
-    if (semCalc !== wk) return;
-    const yaAplicado = rebajosHistorial.some(h => h.rebajoId === r.id && h.semana === semana);
-    if (yaAplicado) return;
-    const resultado = resultados.find(res => res.empId === r.empId);
-    if (!resultado || resultado.sinPerfil) return;
+    // Aplica si semanaCalculo coincide o si no tiene semana asignada
+    const sc = r.semanaCalculo || wk;
+    if (sc !== wk) return;
+    // Anti-duplicado via historial
+    if (rebajosHistorial.some(h => h.rebajoId === r.id && h.semana === semana)) return;
+    const res = resultados.find(x => x.empId === r.empId);
+    if (!res || res.sinPerfil) return;
     const pendiente = r.total - r.pagado;
-    const cuotaAplicar = Math.min(r.cuota, pendiente, resultado.neto);
-    if (cuotaAplicar <= 0) return;
-    resultado.neto -= cuotaAplicar;
-    if (resultado.isSplit) {
-      resultado.netoTr = Math.max(0, resultado.netoTr - cuotaAplicar);
-    } else if (resultado.emp?.pago === 'transferencia') {
-      resultado.netoTr = resultado.neto; resultado.netoEf = 0;
-    } else {
-      resultado.netoEf = resultado.neto; resultado.netoTr = 0;
-    }
-    resultado.rebajoRebajo = (resultado.rebajoRebajo || 0) + cuotaAplicar;
-    r.pagado += cuotaAplicar;
+    const cuota = Math.min(r.cuota, pendiente, res.neto);
+    if (cuota <= 0) return;
+    // Descontar del neto
+    res.neto -= cuota;
+    if (res.isSplit) { res.netoTr = Math.max(0, res.netoTr - cuota); }
+    else if (res.emp?.pago === 'transferencia') { res.netoTr = res.neto; res.netoEf = 0; }
+    else { res.netoEf = res.neto; res.netoTr = 0; }
+    res.rebajoRebajo = (res.rebajoRebajo||0) + cuota;
+    // Actualizar rebajo
+    r.pagado += cuota;
     if (r.pagado >= r.total) { r.activo = false; r.semanaCalculo = ''; }
-    else { const sig = new Date(currentWeekStart); sig.setDate(sig.getDate()+7); r.semanaCalculo = sig.toISOString().split('T')[0]; }
-    const entrada = { id: Date.now().toString()+r.id, rebajoId: r.id, semana, empId: r.empId, nombre: r.nombre, concepto: r.concepto, cuotaAplicada: cuotaAplicar, pendienteTras: r.total - r.pagado };
+    else {
+      const sig = new Date(currentWeekStart);
+      sig.setDate(sig.getDate() + 7);
+      r.semanaCalculo = sig.toISOString().split('T')[0];
+    }
+    // Historial
+    const entrada = { id: Date.now().toString()+r.id, rebajoId: r.id, semana, empId: r.empId, nombre: r.nombre, concepto: r.concepto, cuotaAplicada: cuota, pendienteTras: r.total - r.pagado };
     rebajosHistorial.unshift(entrada);
+    // Persistir
     try { localStorage.setItem('planilla_rebajos', JSON.stringify(rebajos)); localStorage.setItem('planilla_rebajos_hist', JSON.stringify(rebajosHistorial)); } catch(e) {}
     if (accessToken) { actualizarRebajoSheets(r); guardarHistorialRebajoSheets(entrada); }
   });
 }
 
 // ══════════════════════════════════════════════════════════════════
-// SINCRONIZACIÓN COMPLETA CON GOOGLE SHEETS
+// REBAJOS — historial y export
 // ══════════════════════════════════════════════════════════════════
-async function sincronizarDesdeSheets() {
-  try { await cargarVacacionesSheets(); } catch(e) { console.warn('Vac:', e.message); }
-  try { await cargarRebajosSheets(); } catch(e) { console.warn('Reb:', e.message); }
-  try { await cargarIncapacidadesSheets(); } catch(e) { console.warn('Inc:', e.message); }
+function renderRebajosHistorial() {
+  const tbody = document.getElementById('reb-hist-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = rebajosHistorial.length ? rebajosHistorial.map(r => `<tr>
+    <td style="font-size:11px;color:var(--text3)">${r.semana}</td>
+    <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3)">${r.empId}</td>
+    <td style="font-weight:500;font-size:12px">${r.nombre}</td>
+    <td style="font-size:12px">${r.concepto}</td>
+    <td style="text-align:right;font-family:'DM Mono',monospace;color:var(--danger)">${fmtMon(r.cuotaAplicada)}</td>
+    <td style="text-align:right;font-family:'DM Mono',monospace">${fmtMon(r.pendienteTras)}</td>
+  </tr>`).join('')
+  : '<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:2rem">Sin historial</td></tr>';
 }
 
+function exportarRebajosExcel() {
+  if (!rebajosHistorial.length) { toast('Sin historial para exportar','warn'); return; }
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([['Semana','ID','Empleado','Concepto','Cuota aplicada','Pendiente'],
+    ...rebajosHistorial.map(r => [r.semana, r.empId, r.nombre, r.concepto, Math.round(r.cuotaAplicada), Math.round(r.pendienteTras)])]);
+  ws['!cols'] = [{wch:22},{wch:6},{wch:30},{wch:25},{wch:16},{wch:20}];
+  XLSX.utils.book_append_sheet(wb, ws, 'Historial Rebajos');
+  XLSX.writeFile(wb, 'Rebajos_Profecha.xlsx');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// SINCRONIZACIÓN CON GOOGLE SHEETS
+// ══════════════════════════════════════════════════════════════════
+async function sincronizarDesdeSheets() {
+  try { await cargarVacacionesSheets(); } catch(e) { console.warn('Vac sync:', e.message); }
+  try { await cargarRebajosSheets();    } catch(e) { console.warn('Reb sync:', e.message); }
+  try { await cargarIncapacidadesSheets(); } catch(e) { console.warn('Inc sync:', e.message); }
+}
+
+// ── VACACIONES ─────────────────────────────────────────────────────
 async function cargarVacacionesSheets() {
   const d = await sheetsGet('Vacaciones!A1:O2000');
   const rows = d.values || [];
-  const registros = [];
+  vacRegistros = [];
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i]; if (!r || !r[0]) continue;
-    registros.push({ fecha:r[0]||'', empId:String(r[1]||''), nombre:r[2]||'', tipo:r[3]||'cancelada', dias:parseInt(r[4])||0, monto:parseFloat(r[5])||0, pago:r[6]||'efectivo', fechaIni:r[7]||'', fechaFin:r[8]||'', periodo:r[9]||'', periodoLabel:r[10]||'', nota:r[11]||'', grupoId:r[12]||'', id:r[13]||Date.now().toString(), semanaCalculo:r[14]||null });
+    vacRegistros.push({
+      fecha: r[0]||'', empId: String(r[1]||''), nombre: r[2]||'', tipo: r[3]||'cancelada',
+      dias: parseInt(r[4])||0, monto: parseFloat(r[5])||0, pago: r[6]||'efectivo',
+      fechaIni: r[7]||'', fechaFin: r[8]||'', periodo: r[9]||'', periodoLabel: r[10]||'',
+      nota: r[11]||'', grupoId: r[12]||'', id: r[13]||String(Date.now()),
+      semanaCalculo: r[14]||null
+    });
   }
-  vacRegistros = registros;
-  const da = await sheetsGet('Vac_Ajustes!A1:D200');
+  const da = await sheetsGet('Vac_Ajustes!A1:D500');
   const rowsA = da.values || [];
-  const ajustes = {};
+  vacAjustes = {};
   for (let i = 1; i < rowsA.length; i++) {
     const r = rowsA[i]; if (!r || !r[0]) continue;
-    ajustes[String(r[0])] = { canceladas: parseInt(r[2])||0, disfrutadas: parseInt(r[3])||0 };
+    vacAjustes[String(r[0])] = { canceladas: parseInt(r[2])||0, disfrutadas: parseInt(r[3])||0 };
   }
-  vacAjustes = ajustes;
   try { localStorage.setItem('planilla_vac_registros', JSON.stringify(vacRegistros)); localStorage.setItem('planilla_vac_ajustes', JSON.stringify(vacAjustes)); } catch(e) {}
 }
 
 async function guardarVacEnSheets(r) {
-  try { await sheetsAppend('Vacaciones!A1', [[r.fecha, r.empId, r.nombre, r.tipo, r.dias, Math.round(r.monto), r.pago, r.fechaIni||'', r.fechaFin||'', r.periodo||'', r.periodoLabel||'', r.nota||'', r.grupoId||'', r.id, r.semanaCalculo||'']]); } catch(e) { console.warn('guardarVac:', e.message); }
+  try {
+    await sheetsAppend('Vacaciones!A1', [[
+      r.fecha, r.empId, r.nombre, r.tipo, r.dias, Math.round(r.monto),
+      r.pago, r.fechaIni||'', r.fechaFin||'', r.periodo||'', r.periodoLabel||'',
+      r.nota||'', r.grupoId||'', r.id, r.semanaCalculo||''
+    ]]);
+  } catch(e) { console.warn('guardarVac:', e.message); }
 }
 
 async function sincronizarAjustesVacSheets() {
   if (!accessToken) return;
   try {
     const rows = [['ID_Emp','Nombre','Canceladas_Previas','Disfrutadas_Previas']];
-    Object.entries(vacAjustes).forEach(([id, aj]) => { const emp = empleados.find(e => e.id === id); rows.push([id, emp?emp.nombre:id, aj.canceladas||0, aj.disfrutadas||0]); });
+    Object.entries(vacAjustes).forEach(([id, aj]) => {
+      const emp = empleados.find(e => e.id === id);
+      rows.push([id, emp ? emp.nombre : id, aj.canceladas||0, aj.disfrutadas||0]);
+    });
     await sheetsWrite('Vac_Ajustes!A1', rows);
   } catch(e) { console.warn('sincAjustes:', e.message); }
 }
@@ -3475,28 +3309,44 @@ async function reescribirVacacionesSheets() {
   } catch(e) { console.warn('reescribirVac:', e.message); }
 }
 
+// ── REBAJOS ────────────────────────────────────────────────────────
 async function cargarRebajosSheets() {
   const d = await sheetsGet('Rebajos!A1:K500');
   const rows = d.values || [];
-  const rbjs = [];
+  rebajos = [];
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i]; if (!r || !r[0]) continue;
-    rbjs.push({ id:r[0]||Date.now().toString(), fecha:r[1]||'', empId:String(r[2]||''), nombre:r[3]||'', concepto:r[4]||'', total:parseFloat(r[5])||0, cuota:parseFloat(r[6])||0, pagado:parseFloat(r[7])||0, nota:r[8]||'', activo:r[9]!=='FALSE'&&r[9]!==false&&r[9]!=='0', semanaCalculo:r[10]||'' });
+    rebajos.push({
+      id: r[0]||String(Date.now()), fecha: r[1]||'', empId: String(r[2]||''),
+      nombre: r[3]||'', concepto: r[4]||'', total: parseFloat(r[5])||0,
+      cuota: parseFloat(r[6])||0, pagado: parseFloat(r[7])||0, nota: r[8]||'',
+      activo: r[9] !== 'FALSE' && r[9] !== false && r[9] !== '0',
+      semanaCalculo: r[10]||''
+    });
   }
-  rebajos = rbjs;
   const dh = await sheetsGet('Reb_Historial!A1:H2000');
   const rowsH = dh.values || [];
-  const hist = [];
+  rebajosHistorial = [];
   for (let i = 1; i < rowsH.length; i++) {
     const r = rowsH[i]; if (!r || !r[0]) continue;
-    hist.push({ id:r[0]||'', semana:r[1]||'', empId:String(r[2]||''), nombre:r[3]||'', concepto:r[4]||'', cuotaAplicada:parseFloat(r[5])||0, pendienteTras:parseFloat(r[6])||0, rebajoId:r[7]||'' });
+    rebajosHistorial.push({
+      id: r[0]||'', semana: r[1]||'', empId: String(r[2]||''),
+      nombre: r[3]||'', concepto: r[4]||'',
+      cuotaAplicada: parseFloat(r[5])||0, pendienteTras: parseFloat(r[6])||0,
+      rebajoId: r[7]||''
+    });
   }
-  rebajosHistorial = hist;
   try { localStorage.setItem('planilla_rebajos', JSON.stringify(rebajos)); localStorage.setItem('planilla_rebajos_hist', JSON.stringify(rebajosHistorial)); } catch(e) {}
 }
 
 async function guardarRebajoEnSheets(r) {
-  try { await sheetsAppend('Rebajos!A1', [[r.id, r.fecha||'', r.empId, r.nombre, r.concepto, r.total, r.cuota, r.pagado, r.nota||'', r.activo?'TRUE':'FALSE', r.semanaCalculo||'']]); } catch(e) { console.warn('guardarRebajo:', e.message); }
+  try {
+    await sheetsAppend('Rebajos!A1', [[
+      r.id, r.fecha||'', r.empId, r.nombre, r.concepto,
+      r.total, r.cuota, r.pagado, r.nota||'',
+      r.activo ? 'TRUE' : 'FALSE', r.semanaCalculo||''
+    ]]);
+  } catch(e) { console.warn('guardarRebajo:', e.message); }
 }
 
 async function actualizarRebajoSheets(r) {
@@ -3504,39 +3354,51 @@ async function actualizarRebajoSheets(r) {
   try {
     const d = await sheetsGet('Rebajos!A1:A500');
     const rows = d.values || [];
-    const rowIdx = rows.findIndex(row => row[0] === r.id);
-    const fila = [[r.id, r.fecha||'', r.empId, r.nombre, r.concepto, r.total, r.cuota, r.pagado, r.nota||'', r.activo?'TRUE':'FALSE', r.semanaCalculo||'']];
-    if (rowIdx < 0) { await sheetsAppend('Rebajos!A1', fila); }
-    else { await sheetsWrite(`Rebajos!A${rowIdx+1}`, fila); }
+    const idx = rows.findIndex(row => row[0] === r.id);
+    const fila = [[r.id, r.fecha||'', r.empId, r.nombre, r.concepto, r.total, r.cuota, r.pagado, r.nota||'', r.activo ? 'TRUE' : 'FALSE', r.semanaCalculo||'']];
+    if (idx < 0) { await sheetsAppend('Rebajos!A1', fila); }
+    else { await sheetsWrite(`Rebajos!A${idx + 1}`, fila); }
   } catch(e) { console.warn('actualizarRebajo:', e.message); }
 }
 
-async function guardarHistorialRebajoSheets(entrada) {
-  try { await sheetsAppend('Reb_Historial!A1', [[entrada.id, entrada.semana, entrada.empId, entrada.nombre, entrada.concepto, entrada.cuotaAplicada, entrada.pendienteTras, entrada.rebajoId]]); } catch(e) { console.warn('guardarHist:', e.message); }
+async function guardarHistorialRebajoSheets(e) {
+  try {
+    await sheetsAppend('Reb_Historial!A1', [[e.id, e.semana, e.empId, e.nombre, e.concepto, e.cuotaAplicada, e.pendienteTras, e.rebajoId]]);
+  } catch(e2) { console.warn('guardarHist:', e2.message); }
 }
 
 async function reescribirRebajosSheets() {
   try {
     const rows = [['ID_Rebajo','Fecha','ID_Emp','Nombre','Concepto','Total','Cuota','Pagado','Nota','Activo','SemanaCalculo']];
-    rebajos.forEach(r => rows.push([r.id, r.fecha||'', r.empId, r.nombre, r.concepto, r.total, r.cuota, r.pagado, r.nota||'', r.activo?'TRUE':'FALSE', r.semanaCalculo||'']));
+    rebajos.forEach(r => rows.push([r.id, r.fecha||'', r.empId, r.nombre, r.concepto, r.total, r.cuota, r.pagado, r.nota||'', r.activo ? 'TRUE' : 'FALSE', r.semanaCalculo||'']));
     await sheetsWrite('Rebajos!A1', rows);
   } catch(e) { console.warn('reescribirReb:', e.message); }
 }
 
+// ── INCAPACIDADES ──────────────────────────────────────────────────
 async function cargarIncapacidadesSheets() {
   const d = await sheetsGet('Incapacidades!A1:M500');
   const rows = d.values || [];
-  const incs = [];
+  incRegistros = [];
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i]; if (!r || !r[0]) continue;
-    incs.push({ fecha:r[0]||'', empId:String(r[1]||''), nombre:r[2]||'', caso:r[3]||'', fechaIni:r[4]||'', fechaFin:r[5]||'', dias:parseInt(r[6])||0, monto:parseFloat(r[7])||0, pago:r[8]||'efectivo', mes:r[9]||'', nota:r[10]||'', id:r[11]||Date.now().toString(), semanaCalculo:r[12]||null });
+    incRegistros.push({
+      fecha: r[0]||'', empId: String(r[1]||''), nombre: r[2]||'', caso: r[3]||'',
+      fechaIni: r[4]||'', fechaFin: r[5]||'', dias: parseInt(r[6])||0,
+      monto: parseFloat(r[7])||0, pago: r[8]||'efectivo', mes: r[9]||'',
+      nota: r[10]||'', id: r[11]||String(Date.now()), semanaCalculo: r[12]||null
+    });
   }
-  incRegistros = incs;
   try { localStorage.setItem('planilla_inc_registros', JSON.stringify(incRegistros)); } catch(e) {}
 }
 
 async function guardarIncEnSheets(r) {
-  try { await sheetsAppend('Incapacidades!A1', [[r.fecha, r.empId, r.nombre, r.caso||'', r.fechaIni, r.fechaFin, r.dias, Math.round(r.monto), r.pago, r.mes, r.nota||'', r.id, r.semanaCalculo||'']]); } catch(e) { console.warn('guardarInc:', e.message); }
+  try {
+    await sheetsAppend('Incapacidades!A1', [[
+      r.fecha, r.empId, r.nombre, r.caso||'', r.fechaIni, r.fechaFin,
+      r.dias, Math.round(r.monto), r.pago, r.mes, r.nota||'', r.id, r.semanaCalculo||''
+    ]]);
+  } catch(e) { console.warn('guardarInc:', e.message); }
 }
 
 async function reescribirIncapacidadesSheets() {
@@ -3551,49 +3413,43 @@ async function reescribirIncapacidadesSheets() {
 function generarConstanciaVacaciones(data) {
   const { emp, dias, fechaIni, fechaFin, periodo, tipo, pago, monto, fechaDoc, grupoId } = data;
   const fechaDocFmt = new Date(fechaDoc+'T12:00:00').toLocaleDateString('es-CR',{day:'2-digit',month:'long',year:'numeric'});
-  const fmtF = f => { if(!f) return '___/___/______'; return new Date(f+'T12:00:00').toLocaleDateString('es-CR',{day:'2-digit',month:'long',year:'numeric'}); };
-  const tipoTexto = tipo==='ambas'?'disfrutadas y debidamente canceladas':tipo==='disfrutada'?'disfrutadas (período de descanso)':'canceladas (pago sin disfrute)';
-  const pagoTexto = tipo==='disfrutada'?'':`<p style="margin:.6rem 0">El pago se realizó mediante <strong>${pago==='transferencia'?'transferencia bancaria':'efectivo'}</strong>, por un monto de <strong>${fmtMon(monto)}</strong>.</p>`;
-  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Constancia de Vacaciones</title>
-<style>@page{margin:2cm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;font-size:13px;color:#1a1917;line-height:1.6;margin:0}
-.header{display:flex;align-items:center;gap:1.5rem;border-bottom:3px solid #2d5a3d;padding-bottom:1rem;margin-bottom:1.5rem}
+  const fmtF = f => f ? new Date(f+'T12:00:00').toLocaleDateString('es-CR',{day:'2-digit',month:'long',year:'numeric'}) : '___';
+  const tipoTxt = tipo==='ambas'?'disfrutadas y canceladas':tipo==='disfrutada'?'disfrutadas':'canceladas';
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Constancia Vacaciones</title>
+<style>@page{margin:2cm}body{font-family:Arial,sans-serif;font-size:13px;color:#1a1917;line-height:1.6}
+.hdr{display:flex;align-items:center;gap:1.5rem;border-bottom:3px solid #2d5a3d;padding-bottom:1rem;margin-bottom:1.5rem}
 .logo{width:80px;height:80px;object-fit:contain;border-radius:8px}
-.header-text h1{margin:0;font-size:22px;color:#2d5a3d}
-.header-text p{margin:2px 0;font-size:12px;color:#666}
-.titulo{text-align:center;font-size:17px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:1.5rem 0}
-.fecha-doc{text-align:right;font-size:12px;color:#666;margin-bottom:1rem}
-.cuerpo{text-align:justify;margin-bottom:1rem}.cuerpo p{margin:.7rem 0}
-.datos{background:#f5f4f0;border-radius:8px;padding:1rem 1.2rem;margin:1rem 0}
-.dato-row{display:flex;gap:1rem;margin-bottom:.4rem;font-size:12px}
-.dato-label{color:#666;min-width:120px}.dato-val{font-weight:600}
+h1{margin:0;font-size:20px;color:#2d5a3d}p.sub{margin:2px 0;font-size:11px;color:#666}
+.titulo{text-align:center;font-size:16px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:1.5rem 0}
+.datos{background:#f5f4f0;border-radius:8px;padding:1rem;margin:1rem 0}
+.dato{display:flex;gap:1rem;margin-bottom:.4rem;font-size:12px}
+.lbl{color:#666;min-width:120px}.val{font-weight:600}
 .firmas{display:grid;grid-template-columns:1fr 1fr;gap:3rem;margin-top:3rem}
-.firma-linea{border-top:1px solid #333;padding-top:.4rem;margin-top:2rem;font-size:12px;color:#444;text-align:center}
-.doc-id{font-size:10px;color:#aaa;text-align:right;margin-top:2rem}
-@media print{.no-print{display:none!important}}</style></head><body>
-<div class="no-print" style="background:#2d5a3d;color:#fff;padding:.5rem 1rem;display:flex;gap:1rem;align-items:center;margin-bottom:1rem">
-  <span style="font-size:13px;font-weight:500">Constancia generada</span>
-  <button onclick="window.print()" style="background:#fff;color:#2d5a3d;border:none;padding:5px 14px;border-radius:5px;font-weight:600;cursor:pointer">🖨 Imprimir</button>
-  <button onclick="window.close()" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.4);padding:5px 12px;border-radius:5px;cursor:pointer">Cerrar</button>
-</div>
-<div class="header"><img class="logo" src="https://media-cdn.tripadvisor.com/media/photo-s/04/a0/da/cc/la-fiesta-del-maiz.jpg" onerror="this.style.display='none'">
-<div class="header-text"><h1>Restaurante La Fiesta de Maíz</h1><p>Profecha S.A. · Costa Rica</p><p>Planilla y Recursos Humanos</p></div></div>
+.firma{border-top:1px solid #333;padding-top:.4rem;margin-top:2.5rem;font-size:12px;text-align:center}
+@media print{.noprint{display:none}}</style></head><body>
+<div class="noprint" style="background:#2d5a3d;color:#fff;padding:.5rem 1rem;display:flex;gap:1rem;align-items:center;margin-bottom:1rem">
+<span>Constancia lista</span>
+<button onclick="window.print()" style="background:#fff;color:#2d5a3d;border:none;padding:5px 14px;border-radius:5px;font-weight:600;cursor:pointer">🖨 Imprimir / Descargar PDF</button>
+<button onclick="window.close()" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.4);padding:5px 12px;border-radius:5px;cursor:pointer">Cerrar</button></div>
+<div class="hdr"><img class="logo" src="https://media-cdn.tripadvisor.com/media/photo-s/04/a0/da/cc/la-fiesta-del-maiz.jpg" onerror="this.style.display='none'">
+<div><h1>Restaurante La Fiesta de Maíz</h1><p class="sub">Profecha S.A. &middot; Costa Rica</p><p class="sub">Planilla y Recursos Humanos</p></div></div>
 <div class="titulo">Constancia de Vacaciones</div>
-<div class="fecha-doc">Fecha de emisión: ${fechaDocFmt}</div>
-<div class="cuerpo"><p>Por medio de la presente se hace constar que el/la colaborador/a <strong>${emp.nombre}</strong>, portador/a de la cédula <strong>${emp.cedula||'___________________'}</strong>, con puesto de <strong>${emp.puesto||'___________________'}</strong>, gozó de sus vacaciones ${tipoTexto}, correspondientes al período <strong>${periodo}</strong>, conforme al Código de Trabajo de Costa Rica.</p></div>
+<p style="text-align:right;font-size:12px;color:#666">${fechaDocFmt}</p>
+<p>Por medio de la presente se hace constar que <strong>${emp.nombre}</strong>, cédula <strong>${emp.cedula||'_________'}</strong>, puesto <strong>${emp.puesto||'_________'}</strong>, gozó de vacaciones <strong>${tipoTxt}</strong> correspondientes al período <strong>${periodo}</strong>.</p>
 <div class="datos">
-  <div class="dato-row"><span class="dato-label">Período laboral:</span><span class="dato-val">${periodo}</span></div>
-  <div class="dato-row"><span class="dato-label">Días:</span><span class="dato-val">${dias} días</span></div>
-  <div class="dato-row"><span class="dato-label">Fecha inicio:</span><span class="dato-val">${fmtF(fechaIni)}</span></div>
-  <div class="dato-row"><span class="dato-label">Fecha fin:</span><span class="dato-val">${fmtF(fechaFin)}</span></div>
-  <div class="dato-row"><span class="dato-label">Tipo:</span><span class="dato-val">${tipoTexto.charAt(0).toUpperCase()+tipoTexto.slice(1)}</span></div>
-  ${tipo!=='disfrutada'?`<div class="dato-row"><span class="dato-label">Monto cancelado:</span><span class="dato-val">${fmtMon(monto)}</span></div>`:''}
+  <div class="dato"><span class="lbl">Período laboral:</span><span class="val">${periodo}</span></div>
+  <div class="dato"><span class="lbl">Días:</span><span class="val">${dias} días</span></div>
+  <div class="dato"><span class="lbl">Desde:</span><span class="val">${fmtF(fechaIni)}</span></div>
+  <div class="dato"><span class="lbl">Hasta:</span><span class="val">${fmtF(fechaFin)}</span></div>
+  <div class="dato"><span class="lbl">Tipo:</span><span class="val">${tipoTxt.charAt(0).toUpperCase()+tipoTxt.slice(1)}</span></div>
+  ${tipo!=='disfrutada'?`<div class="dato"><span class="lbl">Monto:</span><span class="val">${fmtMon(monto)} (${pago==='transferencia'?'transferencia':'efectivo'})</span></div>`:''}
 </div>
-<div class="cuerpo">${pagoTexto}<p>La relación laboral se mantuvo vigente durante este período, respetándose los derechos y obligaciones de ambas partes.</p></div>
+<p style="font-size:12px">La relación laboral se mantuvo vigente durante este período, conforme al Código de Trabajo de Costa Rica.</p>
 <div class="firmas">
-  <div><div class="firma-linea">Atentamente,<br>Encargado/a de planilla<br><em style="font-size:11px;color:#aaa">Firma y nombre</em></div></div>
-  <div><div class="firma-linea">Recibido por,<br>${emp.nombre}<br><em style="font-size:11px;color:#aaa">Cédula: ${emp.cedula||'_______________'}</em></div></div>
+  <div><div class="firma">Atentamente,<br>Encargado/a de planilla<br><em style="font-size:11px;color:#aaa">Firma y nombre</em></div></div>
+  <div><div class="firma">Recibido por,<br>${emp.nombre}<br><em style="font-size:11px;color:#aaa">Cédula: ${emp.cedula||'___'}</em></div></div>
 </div>
-<div class="doc-id">Ref: ${grupoId}</div>
+<p style="font-size:10px;color:#aaa;text-align:right;margin-top:2rem">Ref: ${grupoId}</p>
 <script>window.focus();<\/script></body></html>`;
   try { localStorage.setItem('planilla_ultima_constancia_'+grupoId, html); localStorage.setItem('planilla_ultima_constancia_id', grupoId); } catch(e) {}
   const win = window.open('','_blank','width=850,height=700');
@@ -3605,7 +3461,7 @@ function reabrirUltimaConstancia() {
   const id = localStorage.getItem('planilla_ultima_constancia_id');
   if (!id) { toast('Sin constancia guardada','warn'); return; }
   const html = localStorage.getItem('planilla_ultima_constancia_'+id);
-  if (!html) { toast('La constancia ya no está en caché','warn'); return; }
+  if (!html) { toast('Constancia no disponible en este dispositivo','warn'); return; }
   const win = window.open('','_blank','width=850,height=700');
   if (!win) { toast('Permitir ventanas emergentes','warn'); return; }
   win.document.open(); win.document.write(html); win.document.close();
@@ -3613,13 +3469,10 @@ function reabrirUltimaConstancia() {
 
 function reabrirConstanciaById(grupoId) {
   const html = localStorage.getItem('planilla_ultima_constancia_'+grupoId);
-  if (!html) { toast('Constancia no disponible en caché','warn',4000); return; }
+  if (!html) { toast('Constancia no disponible en este dispositivo','warn',4000); return; }
   const win = window.open('','_blank','width=850,height=700');
   if (!win) { toast('Permitir ventanas emergentes','warn'); return; }
   win.document.open(); win.document.write(html); win.document.close();
 }
 
 
-</script>
-</body>
-</html>
