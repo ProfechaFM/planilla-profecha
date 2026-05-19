@@ -487,11 +487,11 @@ tr:hover td{background:var(--bg)}
         </div>
         <div class="fg">
           <label>Fecha inicio vacaciones</label>
-          <input type="date" id="vac-fecha-ini" class="edit-inp" oninput="actualizarPreviewVac()" style="width:100%">
+          <input type="date" id="vac-fecha-ini" class="edit-inp" oninput="actualizarPreviewVac()" onchange="actualizarPreviewVac()" style="width:100%">
         </div>
         <div class="fg">
           <label>Fecha fin vacaciones</label>
-          <input type="date" id="vac-fecha-fin" class="edit-inp" oninput="actualizarPreviewVac()" style="width:100%">
+          <input type="date" id="vac-fecha-fin" class="edit-inp" oninput="actualizarPreviewVac()" onchange="actualizarPreviewVac()" style="width:100%">
         </div>
         <div class="fg">
           <label>Días hábiles (calculado automáticamente)</label>
@@ -3427,19 +3427,17 @@ function aplicarIncapacidadesAlCalculo() {
 }
 function aplicarRebajosAlCalculo() {
   const semana = weekLabel();
-  const wk = weekKey();
 
   rebajos.filter(r => r.activo).forEach(r => {
-    // Evitar aplicar dos veces en la misma semana (si se recalcula sin guardar)
-    if (r.ultimaSemanaAplicada === wk) return;
+    // Verificar si ya se aplicó esta semana usando el historial
+    const yaEnHistorial = rebajosHistorial.some(h => h.rebajoId === r.id && h.semana === semana);
+    if (yaEnHistorial) return;
 
     const resultado = resultados.find(res => res.empId === r.empId);
     if (!resultado || resultado.sinPerfil) return;
 
-    const neto = resultado.neto;
     const pendiente = r.total - r.pagado;
-    let cuotaAplicar = Math.min(r.cuota, pendiente, neto);
-
+    let cuotaAplicar = Math.min(r.cuota, pendiente, resultado.neto);
     if (cuotaAplicar <= 0) return;
 
     resultado.neto -= cuotaAplicar;
@@ -3455,26 +3453,26 @@ function aplicarRebajosAlCalculo() {
     resultado.rebajoRebajo = (resultado.rebajoRebajo || 0) + cuotaAplicar;
 
     r.pagado += cuotaAplicar;
-    r.ultimaSemanaAplicada = wk;
     if (r.pagado >= r.total) r.activo = false;
 
-    // Evitar duplicar en historial si ya existe entrada para esta semana+rebajo
-    const yaEnHistorial = rebajosHistorial.some(h => h.rebajoId === r.id && h.semana === semana);
-    if (!yaEnHistorial) {
-      rebajosHistorial.unshift({
-        id: Date.now().toString() + r.id,
-        rebajoId: r.id,
-        semana, empId: r.empId, nombre: r.nombre,
-        concepto: r.concepto, cuotaAplicada: cuotaAplicar,
-        pendienteTras: r.total - r.pagado
-      });
+    const entrada = {
+      id: Date.now().toString() + r.id, rebajoId: r.id,
+      semana, empId: r.empId, nombre: r.nombre,
+      concepto: r.concepto, cuotaAplicada: cuotaAplicar,
+      pendienteTras: r.total - r.pagado
+    };
+    rebajosHistorial.unshift(entrada);
+
+    try {
+      localStorage.setItem('planilla_rebajos', JSON.stringify(rebajos));
+      localStorage.setItem('planilla_rebajos_hist', JSON.stringify(rebajosHistorial));
+    } catch(e) {}
+
+    if (accessToken) {
+      actualizarRebajoSheets(r);
+      guardarHistorialRebajoSheets(entrada);
     }
   });
-
-  try {
-    localStorage.setItem('planilla_rebajos', JSON.stringify(rebajos));
-    localStorage.setItem('planilla_rebajos_hist', JSON.stringify(rebajosHistorial));
-  } catch(e) {}
 }
 
 function renderRebajosHistorial() {
