@@ -1023,6 +1023,12 @@ tr:hover td{background:var(--bg)}
 // ── Utilities (defined first — used throughout) ──────────────────
 function debounce(fn,ms=400){let tid;return(...args)=>{clearTimeout(tid);tid=setTimeout(()=>fn(...args),ms);};}
 const MESES_ES=['ene','feb','mar','abr','may','jun','jul','ago','set','oct','nov','dic'];
+// Alias: es-CR genera 'sept' (4 letras) que truncado a 3 da 'sep', no 'set'
+function mesIndex(word){
+  const w=word.toLowerCase().replace('.','').substring(0,3);
+  if(w==='sep')return 8;
+  return MESES_ES.indexOf(w);
+}
 const _recalcDebounced=debounce(()=>{if(resultados.length)recalcularSilencioso();},500);
 
 const CLIENT_ID='208106774559-e48u19274onhe0fsc47kqh9ki4q5kosg.apps.googleusercontent.com';
@@ -1090,6 +1096,7 @@ function nav(id,el){
   if(id==='vacaciones'){poblarVacEmpSelect();renderVacSaldo();}
   if(id==='rebajos')renderRebajosActivos();
   if(id==='incapacidades'){poblarIncEmpSelect();actualizarPreviewInc();}
+  if(id==='config')initConfigUI();
 }
 
 // Wire nav items — must be after nav() is defined
@@ -1393,7 +1400,6 @@ async function calcularPago(){
   const wk=weekKey();
   const wData=horarioActual[wk]||{};
   resultados=[];
-  let totBruto=0,totCCSS=0,totEf=0,totTr=0;
 
   const empIds=new Set([...empleados.map(e=>e.id),...Object.keys(wData).filter(k=>!k.endsWith('_fer')&&Object.keys(wData[k]).some(dk=>dk.startsWith('d')))]);
 
@@ -1932,7 +1938,15 @@ async function sheetsReq(method,path,body){
   const opts={method,headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'}};
   if(body)opts.body=JSON.stringify(body);
   const r=await fetch(url,opts);
-  if(!r.ok)throw new Error('Sheets error '+r.status);
+  if(!r.ok){
+    // Token expirado o inválido (401/403): notificar al usuario y marcar desconectado
+    if(r.status===401||r.status===403){
+      accessToken=null;
+      setConnected(false);
+      toast('Tu sesión con Google expiró. Reconectate en Configuración para guardar cambios.','warn',7000);
+    }
+    throw new Error('Sheets error '+r.status);
+  }
   return r.json();
 }
 async function sheetsGet(range){return sheetsReq('GET',`/values/${encodeURIComponent(range)}`);}
@@ -2052,17 +2066,12 @@ async function guardarRegistro(){
   const etiqueta=weekLabel();
   const header=[`Semana del ${etiqueta}`,'','','','',''];
   const rows=resultados.filter(r=>!r.sinPerfil).map(r=>{
-    // Bruto real = salario base + vacaciones canceladas + incapacidades/licencias (bruto)
-    const vacMonto  = (r.vacEf||0) + (r.vacTr||0);
-    const incBruto  = (r.incapacidades||[]).reduce((s,i)=>s+(i.bruto||i.monto||0),0);
-    const brutoReal = Math.round(r.bruto + vacMonto + incBruto);
-    // CCSS real = CCSS base + CCSS de licencias de maternidad/goce
-    const incCCSS   = (r.incapacidades||[]).reduce((s,i)=>s+(i.rebajoCC||0),0);
-    const ccssReal  = Math.round(r.rebajoCC + incCCSS);
-    // Neto registrado = neto después de aplicar vac/inc pero ANTES de rebajos de cuotas
-    // (los rebajos de cuotas no son salario, no deben reducir la base para aguinaldo)
-    const netoReal  = Math.round(r.neto + (r.rebajoRebajo||0));
-    return [r.empId, r.nombre, r.emp.cuenta||'N/A', netoReal, ccssReal, brutoReal];
+    // r.bruto y r.rebajoCC ya incluyen vacaciones canceladas y licencias maternidad/goce
+    // porque aplicarVacacionesAlCalculo y aplicarIncapacidadesAlCalculo los sumaron al res.
+    // Neto registrado = neto + rebajos de cuotas, porque los rebajos no son salario
+    // (no deben reducir la base para aguinaldo ni liquidaciones — Código de Trabajo CR)
+    const netoReal = Math.round(r.neto + (r.rebajoRebajo||0));
+    return [r.empId, r.nombre, r.emp.cuenta||'N/A', netoReal, Math.round(r.rebajoCC), Math.round(r.bruto)];
   });
   try{
     await sobreescribirOAgregar('Registro Semanal',etiqueta,header,rows);
@@ -2596,7 +2605,7 @@ async function guardarEmpleadosSheets(silent=false){
 function parsearEtiquetaSemana(etiqueta){
   const m=etiqueta.match(/(\d{1,2})\s+([a-záéíóú.]+)\s+(\d{4})/i);
   if(!m)return null;
-  const mes0=MESES_ES.indexOf(m[2].toLowerCase().replace('.','').substring(0,3));
+  const mes0=mesIndex(m[2]);
   if(mes0===-1)return null;
   return{mes0,anio:parseInt(m[3])};
 }
@@ -2621,7 +2630,7 @@ function agIdsSeleccionados(){return[...document.querySelectorAll('.ag-check:che
 function agParsearFechaEtiqueta(etiqueta){
   const m=etiqueta.match(/(\d{1,2})\s+([a-záéíóú.]+)\s+(\d{4})/i);
   if(!m)return null;
-  const mes0=MESES_ES.indexOf(m[2].toLowerCase().replace('.','').substring(0,3));
+  const mes0=mesIndex(m[2]);
   if(mes0===-1)return null;
   return new Date(parseInt(m[3]),mes0,parseInt(m[1]));
 }
@@ -3246,56 +3255,34 @@ function aplicarIncapacidadesAlCalculo() {
 }
 
 function aplicarRebajosAlCalculo() {
-  // SOLO aplica al display (neto visual). No muta r.pagado ni r.semanaCalculo.
-  // El commit real (persistir pagado, avanzar semanaCalculo, guardar historial)
-  // ocurre en commitRebajosSemanales(), llamado únicamente desde guardarRegistroSemanal().
-  const semana = weekLabel();
-  const wk = weekKey();
+  // Modelo manual: rebajos activos siempre se muestran como -cuota en el cálculo,
+  // hasta que el usuario aplique la cuota manualmente en la pestaña Rebajos.
+  // No toca r.pagado ni r.semanaCalculo.
   rebajos.filter(r => r.activo).forEach(r => {
-    const sc = r.semanaCalculo || wk;
-    if (sc !== wk) return;
+    const pendiente = r.total - r.pagado;
+    if (pendiente <= 0) return;
     const res = resultados.find(x => x.empId === r.empId);
     if (!res || res.sinPerfil) return;
-    const pendiente = r.total - r.pagado;
     const cuota = Math.min(r.cuota, pendiente, res.neto);
     if (cuota <= 0) return;
-    // Solo modificar el display, sin tocar r.pagado
+    // Deducción incremental — preserva vacaciones/incapacidades por canal cruzado.
+    // Prioridad de descuento: del canal principal del empleado primero, luego del otro.
     res.neto -= cuota;
-    if (res.isSplit) { res.netoTr = Math.max(0, res.netoTr - cuota); }
-    else if (res.emp?.pago === 'transferencia') { res.netoTr = res.neto; res.netoEf = 0; }
-    else { res.netoEf = res.neto; res.netoTr = 0; }
+    if (res.isSplit) {
+      // En split, los rebajos salen del lado de transferencia (jornada principal)
+      res.netoTr = Math.max(0, res.netoTr - cuota);
+    } else if (res.emp?.pago === 'transferencia') {
+      const desdeTr = Math.min(res.netoTr, cuota);
+      res.netoTr -= desdeTr;
+      if (cuota > desdeTr) res.netoEf = Math.max(0, res.netoEf - (cuota - desdeTr));
+    } else {
+      const desdeEf = Math.min(res.netoEf, cuota);
+      res.netoEf -= desdeEf;
+      if (cuota > desdeEf) res.netoTr = Math.max(0, res.netoTr - (cuota - desdeEf));
+    }
     res.rebajoRebajo = (res.rebajoRebajo||0) + cuota;
     res.rebajosAplicados = res.rebajosAplicados || [];
     res.rebajosAplicados.push({ rebajoId: r.id, cuota, concepto: r.concepto });
-  });
-}
-
-function commitRebajosSemanales() {
-  // Llamado UNA sola vez al guardar el registro semanal (guardarRegistroSemanal).
-  // Persiste pagado, avanza semanaCalculo y guarda historial en Sheets.
-  const semana = weekLabel();
-  const wk = weekKey();
-  // Anti-duplicado: si ya se hizo commit esta semana no repetir
-  if (rebajosHistorial.some(h => h.semana === semana)) return;
-  rebajos.filter(r => r.activo).forEach(r => {
-    const sc = r.semanaCalculo || wk;
-    if (sc !== wk) return;
-    const res = resultados.find(x => x.empId === r.empId);
-    if (!res || res.sinPerfil) return;
-    const pendiente = r.total - r.pagado;
-    const cuota = Math.min(r.cuota, pendiente, (res.neto + (res.rebajoRebajo||0))); // neto antes del rebajo
-    if (cuota <= 0) return;
-    r.pagado += cuota;
-    if (r.pagado >= r.total) { r.activo = false; r.semanaCalculo = ''; }
-    else {
-      const sig = new Date(currentWeekStart);
-      sig.setDate(sig.getDate() + 7);
-      r.semanaCalculo = sig.toISOString().split('T')[0];
-    }
-    const entrada = { id: Date.now().toString()+r.id, rebajoId: r.id, semana, empId: r.empId, nombre: r.nombre, concepto: r.concepto, cuotaAplicada: cuota, pendienteTras: r.total - r.pagado };
-    rebajosHistorial.unshift(entrada);
-    try { localStorage.setItem('planilla_rebajos', JSON.stringify(rebajos)); localStorage.setItem('planilla_rebajos_hist', JSON.stringify(rebajosHistorial)); } catch(e) {}
-    if (accessToken) { actualizarRebajoSheets(r); guardarHistorialRebajoSheets(entrada); }
   });
 }
 
@@ -3836,6 +3823,67 @@ function exportarIncExcel() {
   XLSX.utils.book_append_sheet(wb, ws, 'Licencias e Incapacidades');
   XLSX.writeFile(wb, 'Incapacidades_Profecha.xlsx');
 }
+
+// ══════════════════════════════════════════════════════════════════
+// RESTAURACIÓN DE ESTADO DESDE LOCALSTORAGE
+// Se ejecuta al final del script, cuando todas las variables ya existen.
+// Permite que la app funcione con datos del caché aunque el token de Google
+// haya expirado o no haya conexión a Sheets.
+// ══════════════════════════════════════════════════════════════════
+(function restaurarEstadoLocal(){
+  try {
+    const cfgSaved = localStorage.getItem('planilla_cfg');
+    if (cfgSaved) {
+      const c = JSON.parse(cfgSaved);
+      cfg.ccss            = c.ccss            ?? cfg.ccss;
+      cfg.extra           = c.extra           ?? cfg.extra;
+      cfg.doble           = c.doble           ?? cfg.doble;
+      cfg.extraDoble      = c.extraDoble      ?? cfg.extraDoble;
+      cfg.descH           = c.descH           ?? cfg.descH;
+      cfg.descD           = c.descD           ?? cfg.descD;
+      cfg.extrasAcumulativas = c.extrasAcumulativas ?? cfg.extrasAcumulativas;
+    }
+    const r1=localStorage.getItem('planilla_rebajos');        if(r1) rebajos = JSON.parse(r1);
+    const r2=localStorage.getItem('planilla_rebajos_hist');   if(r2) rebajosHistorial = JSON.parse(r2);
+    const r3=localStorage.getItem('planilla_vac_registros');  if(r3) vacRegistros = JSON.parse(r3);
+    const r4=localStorage.getItem('planilla_vac_ajustes');    if(r4) vacAjustes = JSON.parse(r4);
+    const r5=localStorage.getItem('planilla_inc_registros');  if(r5) incRegistros = JSON.parse(r5);
+    const r6=localStorage.getItem('planilla_empleados_cache');if(r6) empleados = JSON.parse(r6);
+    const r7=localStorage.getItem('planilla_fechas_ingreso'); if(r7) FECHAS_INGRESO = JSON.parse(r7);
+    const r8=localStorage.getItem('planilla_movimientos');    if(r8) movimientos = JSON.parse(r8);
+  } catch(e) { console.warn('restaurarEstadoLocal:', e.message); }
+})();
+
+// ══════════════════════════════════════════════════════════════════
+// POBLAR SELECTORES DE AÑO (Historial y Aguinaldo)
+// ══════════════════════════════════════════════════════════════════
+(function poblarAnios(){
+  const anioActual = new Date().getFullYear();
+  const opts = Array.from({length:6},(_,i)=>anioActual-i)
+    .map(a=>`<option value="${a}"${a===anioActual?' selected':''}>${a}</option>`).join('');
+  const h=document.getElementById('hist-anio'), ag=document.getElementById('ag-anio');
+  if(h) h.innerHTML = opts;
+  if(ag) ag.innerHTML = opts;
+})();
+
+// ══════════════════════════════════════════════════════════════════
+// INICIALIZACIÓN DE UI DE CONFIGURACIÓN
+// Sincroniza inputs y radios con los valores actuales de cfg.
+// ══════════════════════════════════════════════════════════════════
+function initConfigUI(){
+  const set = (id, val) => { const el=document.getElementById(id); if(el) el.value=val; };
+  set('cfg-ccss',    cfg.ccss);
+  set('cfg-extra',   cfg.extra);
+  set('cfg-doble',   cfg.doble);
+  set('cfg-extradob',cfg.extraDoble);
+  set('cfg-desc-h',  cfg.descH);
+  set('cfg-desc-d',  cfg.descD);
+  const d=document.getElementById('extras-dia'), a=document.getElementById('extras-acum');
+  if(d) d.checked = !cfg.extrasAcumulativas;
+  if(a) a.checked =  cfg.extrasAcumulativas;
+}
+// Inicializar al cargar (DOM ya está disponible porque este script va al final)
+initConfigUI();
 
 </script>
 </body>
