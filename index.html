@@ -1042,7 +1042,7 @@ let resultados=[];
 let horarioPendiente=false;
 let singlePunches={};
 let currentWeekStart=getWeekStart(new Date());
-let cfg={ccss:10.83,extra:1.5,doble:2.0,extraDoble:3.5,descH:8,descD:48,extrasAcumulativas:false};
+let cfg={ccss:10.83,extra:1.5,doble:2.0,extraDoble:3.5,descH:8,descD:48,extrasAcumulativas:true};
 let editingEmp=null;
 
 document.getElementById('current-url').textContent=window.location.origin;
@@ -1399,19 +1399,24 @@ async function calcularPago(){
 
   empIds.forEach(empId=>{
     const r=calcularEmpleado(empId,wData,cfg,feriados);
-    if(!r.sinPerfil){totBruto+=r.bruto;totCCSS+=r.rebajoCC;totEf+=r.netoEf;totTr+=r.netoTr;}
     resultados.push(r);
   });
 
-  //   });
+  aplicarVacacionesAlCalculo();
+  aplicarIncapacidadesAlCalculo();
+  aplicarRebajosAlCalculo();
+
+  // Totales recalculados DESPUÉS de aplicar vac/inc/rebajos para reflejar el real
+  let totBruto=0,totCCSS=0,totEf=0,totTr=0;
+  resultados.filter(r=>!r.sinPerfil).forEach(r=>{
+    totBruto+=r.bruto; totCCSS+=r.rebajoCC; totEf+=r.netoEf; totTr+=r.netoTr;
+  });
 
   document.getElementById('m-bruto').textContent=fmtMon(totBruto);
   document.getElementById('m-ccss').textContent=fmtMon(totCCSS);
   document.getElementById('m-neto-ef').textContent=fmtMon(totEf);
   document.getElementById('m-neto-tr').textContent=fmtMon(totTr);
-  aplicarVacacionesAlCalculo();
-  aplicarIncapacidadesAlCalculo();
-  aplicarRebajosAlCalculo();
+
   renderCalculo();renderTransferencias();renderBilletes();renderComprobantes();
   toast('Planilla calculada correctamente','ok');
 }
@@ -2416,16 +2421,18 @@ function calcularEmpleado(empId,wData,cfg,feriados){
 // ── recalcularSilencioso (uses unified engine) ───────────────────────
 function recalcularSilencioso(){
   const wk=weekKey(),wData=horarioActual[wk]||{};
-  resultados=[];let totBruto=0,totCCSS=0,totEf=0,totTr=0;
+  resultados=[];
   const empIds=new Set([...empleados.map(e=>e.id),...Object.keys(wData).filter(k=>!k.endsWith('_fer')&&Object.keys(wData[k]).some(dk=>dk.startsWith('d')))]);
-  empIds.forEach(empId=>{const r=calcularEmpleado(empId,wData,cfg,feriados);if(!r.sinPerfil){totBruto+=r.bruto;totCCSS+=r.rebajoCC;totEf+=r.netoEf;totTr+=r.netoTr;}resultados.push(r);});
+  empIds.forEach(empId=>{const r=calcularEmpleado(empId,wData,cfg,feriados);resultados.push(r);});
+  aplicarVacacionesAlCalculo();
+  aplicarIncapacidadesAlCalculo();
+  aplicarRebajosAlCalculo();
+  let totBruto=0,totCCSS=0,totEf=0,totTr=0;
+  resultados.filter(r=>!r.sinPerfil).forEach(r=>{totBruto+=r.bruto;totCCSS+=r.rebajoCC;totEf+=r.netoEf;totTr+=r.netoTr;});
   document.getElementById('m-bruto').textContent=fmtMon(totBruto);
   document.getElementById('m-ccss').textContent=fmtMon(totCCSS);
   document.getElementById('m-neto-ef').textContent=fmtMon(totEf);
   document.getElementById('m-neto-tr').textContent=fmtMon(totTr);
-  aplicarVacacionesAlCalculo();
-  aplicarIncapacidadesAlCalculo();
-  aplicarRebajosAlCalculo();
   renderCalculo();renderTransferencias();renderBilletes();renderComprobantes();
   const ind=document.getElementById('recalc-indicator');
   if(ind){ind.textContent='↻ Actualizado';ind.style.opacity='1';setTimeout(()=>ind.style.opacity='0',2000);}
