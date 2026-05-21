@@ -549,8 +549,8 @@ tr:hover td{background:var(--bg)}
 
   <!-- TAB: Activos -->
   <div id="reb-tab-activos-content">
-    <div id="reb-sin-conexion" style="display:none" class="alert alert-warn" style="margin-bottom:.75rem">
-      ⚠ <strong>Sin conexión a Sheets.</strong> Mostrando datos del caché local de esta PC. Conectate para ver los rebajos actualizados desde cualquier dispositivo.
+    <div id="reb-sin-conexion" style="display:none;margin-bottom:.75rem;padding:10px 14px;background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;font-size:12px;color:#92400e">
+      ⚠ <strong>Sin conexión a Sheets.</strong> Mostrando caché local de esta PC. Conectate para sincronizar rebajos entre dispositivos.
     </div>
     <div class="card">
       <div class="tab-wrap">
@@ -1026,6 +1026,11 @@ tr:hover td{background:var(--bg)}
 // ── Utilities (defined first — used throughout) ──────────────────
 function debounce(fn,ms=400){let tid;return(...args)=>{clearTimeout(tid);tid=setTimeout(()=>fn(...args),ms);};}
 const MESES_ES=['ene','feb','mar','abr','may','jun','jul','ago','set','oct','nov','dic'];
+function mesIndex(word){
+  const w=word.toLowerCase().replace('.','').substring(0,3);
+  if(w==='sep')return 8;
+  return MESES_ES.indexOf(w);
+}
 const _recalcDebounced=debounce(()=>{if(resultados.length)recalcularSilencioso();},500);
 
 const CLIENT_ID='208106774559-e48u19274onhe0fsc47kqh9ki4q5kosg.apps.googleusercontent.com';
@@ -1134,6 +1139,17 @@ function nav(id,el){
 document.querySelectorAll('[data-nav]').forEach(function(el) {
   el.addEventListener('click', function() { nav(this.dataset.nav, this); });
 });
+
+// Poblar selectores de año para Historial y Aguinaldo
+(function poblarAnios(){
+  const anioActual=new Date().getFullYear();
+  const opts=Array.from({length:6},(_,i)=>anioActual-i)
+    .map(a=>`<option value="${a}"${a===anioActual?' selected':''}>${a}</option>`).join('');
+  const h=document.getElementById('hist-anio');
+  const ag=document.getElementById('ag-anio');
+  if(h) h.innerHTML=opts;
+  if(ag) ag.innerHTML=opts;
+})();
 
 function updateHeader(){
   document.getElementById('week-label').textContent=weekLabel();
@@ -1896,6 +1912,13 @@ function setConnected(ok){
   if(ok){const el=document.getElementById('reb-sin-conexion');if(el)el.style.display='none';}
 }
 
+function mostrarAvisoSinConexion(modulo){
+  if(modulo==='rebajos'){
+    const el=document.getElementById('reb-sin-conexion');
+    if(el) el.style.display=accessToken?'none':'';
+  }
+}
+
 async function inicializarSheets(){
   try{
     const sheetNames=['Base Datos','Horarios','Registro Semanal','Transferencias'];
@@ -2631,7 +2654,7 @@ async function guardarEmpleadosSheets(silent=false){
 function parsearEtiquetaSemana(etiqueta){
   const m=etiqueta.match(/(\d{1,2})\s+([a-záéíóú.]+)\s+(\d{4})/i);
   if(!m)return null;
-  const mes0=MESES_ES.indexOf(m[2].toLowerCase().replace('.','').substring(0,3));
+  const mes0=mesIndex(m[2]);
   if(mes0===-1)return null;
   return{mes0,anio:parseInt(m[3])};
 }
@@ -2656,7 +2679,7 @@ function agIdsSeleccionados(){return[...document.querySelectorAll('.ag-check:che
 function agParsearFechaEtiqueta(etiqueta){
   const m=etiqueta.match(/(\d{1,2})\s+([a-záéíóú.]+)\s+(\d{4})/i);
   if(!m)return null;
-  const mes0=MESES_ES.indexOf(m[2].toLowerCase().replace('.','').substring(0,3));
+  const mes0=mesIndex(m[2]);
   if(mes0===-1)return null;
   return new Date(parseInt(m[3]),mes0,parseInt(m[1]));
 }
@@ -3119,13 +3142,6 @@ function rebajoTab(tab) {
   if (tab === 'historial') renderRebajosHistorial();
 }
 
-function mostrarAvisoSinConexion(modulo) {
-  if (modulo === 'rebajos') {
-    const el = document.getElementById('reb-sin-conexion');
-    if (el) el.style.display = accessToken ? 'none' : '';
-  }
-}
-
 function renderRebajosActivos() {
   const tbody = document.getElementById('reb-activos-tbody');
   const activos = rebajos.filter(r => r.activo);
@@ -3176,7 +3192,7 @@ function guardarRebajo() {
     id: Date.now().toString(),
     empId, nombre: emp ? emp.nombre : empId,
     concepto, total, cuota, pagado: 0, fecha, nota, activo: true,
-    semanaCalculo: weekKey() // semana en que se aplica la primera cuota
+    semanaCalculo: fecha // fecha de inicio, usada solo como referencia informativa
   };
   rebajos.push(rebajo);
   try { localStorage.setItem('planilla_rebajos', JSON.stringify(rebajos)); } catch(e) {}
@@ -3282,20 +3298,28 @@ function aplicarIncapacidadesAlCalculo() {
 }
 
 function aplicarRebajosAlCalculo() {
-  // SOLO aplica al display (neto visual). No muta r.pagado ni r.semanaCalculo.
-  // El commit real (persistir pagado, avanzar semanaCalculo, guardar historial)
-  // ocurre en commitRebajosSemanales(), llamado únicamente desde guardarRegistroSemanal().
+  // Aplica al display (neto visual). No muta r.pagado ni r.semanaCalculo.
+  // Un rebajo aplica esta semana si:
+  //   1. Está activo
+  //   2. Su fecha de inicio (fecha) es <= al último día de la semana actual
+  //   3. NO aparece ya en rebajosHistorial para esta semana (anti-duplicado de commit)
   const semana = weekLabel();
-  const wk = weekKey();
+  const wkEnd = addDays(currentWeekStart, 6); // domingo de la semana actual
+
   rebajos.filter(r => r.activo).forEach(r => {
-    const sc = r.semanaCalculo || wk;
-    if (sc !== wk) return;
+    // Verificar que la fecha de inicio del rebajo ya pasó o es esta semana
+    const fechaInicio = r.fecha ? new Date(r.fecha + 'T12:00:00') : new Date(0);
+    if (fechaInicio > wkEnd) return; // rebajo empieza en semana futura
+
+    // Si ya fue commiteado esta semana, no mostrar de nuevo
+    if (rebajosHistorial.some(h => h.rebajoId === r.id && h.semana === semana)) return;
+
     const res = resultados.find(x => x.empId === r.empId);
     if (!res || res.sinPerfil) return;
     const pendiente = r.total - r.pagado;
     const cuota = Math.min(r.cuota, pendiente, res.neto);
     if (cuota <= 0) return;
-    // Solo modificar el display, sin tocar r.pagado
+
     res.neto -= cuota;
     if (res.isSplit) { res.netoTr = Math.max(0, res.netoTr - cuota); }
     else if (res.emp?.pago === 'transferencia') { res.netoTr = res.neto; res.netoEf = 0; }
@@ -3307,30 +3331,36 @@ function aplicarRebajosAlCalculo() {
 }
 
 function commitRebajosSemanales() {
-  // Llamado UNA sola vez al guardar el registro semanal (guardarRegistroSemanal).
-  // Persiste pagado, avanza semanaCalculo y guarda historial en Sheets.
+  // Llamado UNA sola vez al guardar el registro semanal.
+  // Persiste pagado y guarda historial. Ya no mueve semanaCalculo.
   const semana = weekLabel();
-  const wk = weekKey();
-  // Anti-duplicado: si ya se hizo commit esta semana no repetir
+  const wkEnd = addDays(currentWeekStart, 6);
+
+  // Anti-duplicado global: si ya hay commit de cualquier rebajo esta semana, no repetir
   if (rebajosHistorial.some(h => h.semana === semana)) return;
+
   rebajos.filter(r => r.activo).forEach(r => {
-    const sc = r.semanaCalculo || wk;
-    if (sc !== wk) return;
+    const fechaInicio = r.fecha ? new Date(r.fecha + 'T12:00:00') : new Date(0);
+    if (fechaInicio > wkEnd) return;
+
     const res = resultados.find(x => x.empId === r.empId);
     if (!res || res.sinPerfil) return;
     const pendiente = r.total - r.pagado;
-    const cuota = Math.min(r.cuota, pendiente, (res.neto + (res.rebajoRebajo||0))); // neto antes del rebajo
+    const cuota = Math.min(r.cuota, pendiente, (res.neto + (res.rebajoRebajo||0)));
     if (cuota <= 0) return;
+
     r.pagado += cuota;
-    if (r.pagado >= r.total) { r.activo = false; r.semanaCalculo = ''; }
-    else {
-      const sig = new Date(currentWeekStart);
-      sig.setDate(sig.getDate() + 7);
-      r.semanaCalculo = sig.toISOString().split('T')[0];
-    }
-    const entrada = { id: Date.now().toString()+r.id, rebajoId: r.id, semana, empId: r.empId, nombre: r.nombre, concepto: r.concepto, cuotaAplicada: cuota, pendienteTras: r.total - r.pagado };
+    if (r.pagado >= r.total) { r.activo = false; }
+    // Ya no avanzamos semanaCalculo — el historial es quien controla qué semanas se cobró
+
+    const entrada = { id: Date.now().toString()+r.id, rebajoId: r.id, semana,
+      empId: r.empId, nombre: r.nombre, concepto: r.concepto,
+      cuotaAplicada: cuota, pendienteTras: r.total - r.pagado };
     rebajosHistorial.unshift(entrada);
-    try { localStorage.setItem('planilla_rebajos', JSON.stringify(rebajos)); localStorage.setItem('planilla_rebajos_hist', JSON.stringify(rebajosHistorial)); } catch(e) {}
+    try {
+      localStorage.setItem('planilla_rebajos', JSON.stringify(rebajos));
+      localStorage.setItem('planilla_rebajos_hist', JSON.stringify(rebajosHistorial));
+    } catch(e) {}
     if (accessToken) { actualizarRebajoSheets(r); guardarHistorialRebajoSheets(entrada); }
   });
 }
