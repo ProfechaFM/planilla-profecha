@@ -3649,8 +3649,15 @@ h1{margin:0;font-size:20px;color:#2d5a3d}p.sub{margin:2px 0;font-size:11px;color
 .dato{display:flex;gap:1rem;margin-bottom:.4rem;font-size:12px}
 .lbl{color:#666;min-width:120px}.val{font-weight:600}
 .firmas{display:grid;grid-template-columns:1fr 1fr;gap:3rem;margin-top:3rem}
-.firma{border-top:1px solid #333;padding-top:.4rem;margin-top:2.5rem;font-size:12px;text-align:center}
-@media print{.noprint{display:none}}</style></head><body>
+.firma-block{min-width:0}
+.firma-titulo{font-size:12px;font-weight:600;color:#333;margin-bottom:1.2rem;text-align:center;border-bottom:1px solid #2d5a3d;padding-bottom:.4rem}
+.firma-linea{margin-bottom:1.3rem;font-size:12px;display:flex;align-items:flex-end;gap:.4rem}
+.firma-linea .flbl{font-weight:600;color:#333;min-width:65px;flex-shrink:0}
+.firma-linea .raya{flex:1;border-bottom:1px solid #333;height:1px;margin-bottom:3px}
+@media print{
+  .noprint{display:none !important}
+  body{margin:0}
+}</style></head><body>
 <div class="noprint" style="background:#2d5a3d;color:#fff;padding:.5rem 1rem;display:flex;gap:1rem;align-items:center;margin-bottom:1rem">
 <span>Constancia lista</span>
 <button onclick="window.print()" style="background:#fff;color:#2d5a3d;border:none;padding:5px 14px;border-radius:5px;font-weight:600;cursor:pointer">🖨 Imprimir / Descargar PDF</button>
@@ -3670,8 +3677,20 @@ h1{margin:0;font-size:20px;color:#2d5a3d}p.sub{margin:2px 0;font-size:11px;color
 </div>
 <p style="font-size:12px">La relación laboral se mantuvo vigente durante este período, conforme al Código de Trabajo de Costa Rica.</p>
 <div class="firmas">
-  <div><div class="firma">Atentamente,<br>Encargado/a de planilla<br><em style="font-size:11px;color:#aaa">Firma y nombre</em></div></div>
-  <div><div class="firma">Recibido por,<br>${emp.nombre}<br><em style="font-size:11px;color:#aaa">Cédula: ${emp.cedula||'___'}</em></div></div>
+  <div class="firma-block">
+    <div class="firma-titulo">Atentamente</div>
+    <div class="firma-linea"><span class="flbl">Nombre:</span><span class="raya"></span></div>
+    <div class="firma-linea"><span class="flbl">Puesto:</span><span class="raya"></span></div>
+    <div class="firma-linea"><span class="flbl">Cédula:</span><span class="raya"></span></div>
+    <div class="firma-linea"><span class="flbl">Firma:</span><span class="raya"></span></div>
+  </div>
+  <div class="firma-block">
+    <div class="firma-titulo">Recibido por el colaborador</div>
+    <div class="firma-linea"><span class="flbl">Nombre:</span><span class="raya"></span><span style="font-size:11px;color:#888;margin-left:4px">${emp.nombre}</span></div>
+    <div class="firma-linea"><span class="flbl">Cédula:</span><span class="raya"></span><span style="font-size:11px;color:#888;margin-left:4px">${emp.cedula||''}</span></div>
+    <div class="firma-linea"><span class="flbl">Fecha:</span><span class="raya"></span></div>
+    <div class="firma-linea"><span class="flbl">Firma:</span><span class="raya"></span></div>
+  </div>
 </div>
 <p style="font-size:10px;color:#aaa;text-align:right;margin-top:2rem">Ref: ${grupoId}</p>
 <script>window.focus();<\/script></body></html>`;
@@ -4252,12 +4271,16 @@ body{font-family:Arial,sans-serif;font-size:13px;color:#1a1917;line-height:1.7}
 .tabla-ingresos .num{text-align:right;font-family:'Courier New',monospace}
 .tabla-ingresos tfoot td{background:#f5f4f0;font-weight:700;border-top:2px solid #2d5a3d;border-bottom:none}
 .cierre{margin-top:1.5rem;text-align:justify}
-.firmas{display:grid;grid-template-columns:1fr 1fr;gap:3rem;margin-top:4rem}
-.firma-block{text-align:center}
-.firma-linea{border-top:1px solid #333;padding-top:.5rem;margin-top:2.5rem;font-size:11px}
-.firma-linea .lbl{color:#888;font-size:10px;text-transform:uppercase;letter-spacing:.5px}
+.firmas{margin-top:4rem;display:flex;justify-content:center}
+.firma-block{min-width:360px}
+.firma-linea{margin-bottom:1.6rem;font-size:13px;display:flex;align-items:flex-end;gap:.5rem}
+.firma-linea .lbl{font-weight:600;color:#333;min-width:80px;flex-shrink:0}
+.firma-linea .raya{flex:1;border-bottom:1px solid #333;height:1px;margin-bottom:3px}
 .pie{margin-top:3rem;padding-top:1rem;border-top:1px solid #e0e0e0;font-size:10px;color:#888;text-align:center}
-@media print{.noprint{display:none}}
+@media print{
+  .noprint{display:none !important}
+  body{margin:0}
+}
 </style></head><body>
 <div class="noprint" style="background:#2d5a3d;color:#fff;padding:.6rem 1rem;display:flex;gap:1rem;align-items:center;margin-bottom:1rem;border-radius:6px">
   <span style="flex:1">Constancia lista para imprimir o descargar como PDF</span>
@@ -4281,16 +4304,10 @@ body{font-family:Arial,sans-serif;font-size:13px;color:#1a1917;line-height:1.7}
 </div>
 <div class="firmas">
   <div class="firma-block">
-    <div class="firma-linea">
-      <div class="lbl">Nombre</div>
-      <div style="margin-top:1.2rem"><span class="lbl">Firma</span></div>
-    </div>
-  </div>
-  <div class="firma-block">
-    <div class="firma-linea">
-      <div class="lbl">Cédula</div>
-      <div style="margin-top:1.2rem"><span class="lbl">Puesto</span></div>
-    </div>
+    <div class="firma-linea"><span class="lbl">Nombre:</span><span class="raya"></span></div>
+    <div class="firma-linea"><span class="lbl">Puesto:</span><span class="raya"></span></div>
+    <div class="firma-linea"><span class="lbl">Cédula:</span><span class="raya"></span></div>
+    <div class="firma-linea"><span class="lbl">Firma:</span><span class="raya"></span></div>
   </div>
 </div>
 <div class="pie">
