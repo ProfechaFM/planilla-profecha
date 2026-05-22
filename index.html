@@ -4096,7 +4096,6 @@ function actualizarPreviewConsLab() {
   if (!emp) return;
   const fechaIng = FECHAS_INGRESO[empId] || '';
   const ant = calcularAntiguedad(fechaIng);
-  const jornada = inferirJornada(emp);
   prev.style.display = '';
   prev.innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem">
@@ -4104,8 +4103,7 @@ function actualizarPreviewConsLab() {
       <div><div style="font-size:11px;color:var(--text3)">Cédula</div><div style="font-weight:600">${emp.cedula||'<span style=\"color:var(--warn)\">Sin cédula registrada</span>'}</div></div>
       <div><div style="font-size:11px;color:var(--text3)">Puesto</div><div style="font-weight:600">${emp.puesto||'—'}</div></div>
       <div><div style="font-size:11px;color:var(--text3)">Fecha de ingreso</div><div style="font-weight:600">${fechaIng||'<span style=\"color:var(--warn)\">No registrada</span>'}</div></div>
-      <div><div style="font-size:11px;color:var(--text3)">Antigüedad</div><div style="font-weight:600;color:var(--accent)">${ant.texto}</div></div>
-      <div><div style="font-size:11px;color:var(--text3)">Jornada</div><div style="font-weight:600">${jornada}</div></div>
+      <div style="grid-column:span 2"><div style="font-size:11px;color:var(--text3)">Antigüedad</div><div style="font-weight:600;color:var(--accent)">${ant.texto}</div></div>
     </div>`;
 }
 
@@ -4254,14 +4252,31 @@ function htmlConstanciaBase(titulo, cuerpoHTML, emp, fechaDoc) {
   const anioFmt = fechaDoc.getFullYear();
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${titulo}</title>
 <style>
-@page{margin:2cm}
-body{font-family:Arial,sans-serif;font-size:13px;color:#1a1917;line-height:1.7}
-.hdr{display:flex;align-items:center;gap:1.5rem;border-bottom:3px solid #2d5a3d;padding-bottom:1rem;margin-bottom:1.5rem}
-.logo{width:90px;height:90px;object-fit:contain;border-radius:8px}
-.hdr-info h1{margin:0;font-size:22px;color:#2d5a3d}
-.hdr-info p{margin:2px 0;font-size:11px;color:#555}
-.hdr-info .nombre-comercial{font-size:12px;font-style:italic;color:#666}
-.titulo{text-align:center;font-size:18px;font-weight:700;text-transform:uppercase;letter-spacing:2px;margin:1.8rem 0 1.5rem;color:#2d5a3d}
+@page{
+  size:letter;
+  margin:3.2cm 2cm 2.5cm 2cm;
+}
+*{box-sizing:border-box}
+body{font-family:Arial,sans-serif;font-size:13px;color:#1a1917;line-height:1.7;margin:0}
+/* Encabezado y pie: position fixed para que se repitan en cada página al imprimir */
+.hdr{
+  position:fixed;top:.5cm;left:2cm;right:2cm;
+  display:flex;align-items:center;gap:1.2rem;
+  border-bottom:3px solid #2d5a3d;padding-bottom:.6rem;
+  background:#fff;
+}
+.logo{width:75px;height:75px;object-fit:contain;border-radius:8px;flex-shrink:0}
+.hdr-info h1{margin:0;font-size:19px;color:#2d5a3d}
+.hdr-info p{margin:1px 0;font-size:10px;color:#555}
+.hdr-info .nombre-comercial{font-size:11px;font-style:italic;color:#666}
+.pie{
+  position:fixed;bottom:.5cm;left:2cm;right:2cm;
+  padding-top:.5rem;border-top:1px solid #ccc;
+  font-size:10px;color:#888;text-align:center;background:#fff;
+}
+/* Espacio que dejamos para que hdr/pie no se solapen con el contenido en navegador */
+.contenido{padding-top:.5rem}
+.titulo{text-align:center;font-size:18px;font-weight:700;text-transform:uppercase;letter-spacing:2px;margin:1.5rem 0 1.2rem;color:#2d5a3d}
 .fecha-doc{text-align:right;font-size:12px;color:#666;margin-bottom:1rem}
 .cuerpo{text-align:justify;margin:1rem 0}
 .cuerpo p{margin:0.8rem 0}
@@ -4271,18 +4286,21 @@ body{font-family:Arial,sans-serif;font-size:13px;color:#1a1917;line-height:1.7}
 .tabla-ingresos .num{text-align:right;font-family:'Courier New',monospace}
 .tabla-ingresos tfoot td{background:#f5f4f0;font-weight:700;border-top:2px solid #2d5a3d;border-bottom:none}
 .cierre{margin-top:1.5rem;text-align:justify}
-.firmas{margin-top:4rem;display:flex;justify-content:center}
-.firma-block{min-width:360px}
-.firma-linea{margin-bottom:1.6rem;font-size:13px;display:flex;align-items:flex-end;gap:.5rem}
-.firma-linea .lbl{font-weight:600;color:#333;min-width:80px;flex-shrink:0}
+/* Firmas: alineadas a la izquierda, rayas cortas */
+.firmas{margin-top:3rem}
+.firma-linea{margin-bottom:1.2rem;font-size:13px;display:flex;align-items:flex-end;gap:.5rem;max-width:380px}
+.firma-linea .lbl{font-weight:600;color:#333;min-width:70px;flex-shrink:0}
 .firma-linea .raya{flex:1;border-bottom:1px solid #333;height:1px;margin-bottom:3px}
-.pie{margin-top:3rem;padding-top:1rem;border-top:1px solid #e0e0e0;font-size:10px;color:#888;text-align:center}
+/* Barra superior visible en navegador, oculta al imprimir */
+.barra-acciones{background:#2d5a3d;color:#fff;padding:.6rem 1rem;display:flex;gap:1rem;align-items:center;margin:1rem 2cm;border-radius:6px}
 @media print{
   .noprint{display:none !important}
+  /* Asegura que body no agregue margin extra; el espacio lo da @page */
   body{margin:0}
+  .hdr, .pie{position:fixed}
 }
 </style></head><body>
-<div class="noprint" style="background:#2d5a3d;color:#fff;padding:.6rem 1rem;display:flex;gap:1rem;align-items:center;margin-bottom:1rem;border-radius:6px">
+<div class="barra-acciones noprint">
   <span style="flex:1">Constancia lista para imprimir o descargar como PDF</span>
   <button onclick="window.print()" style="background:#fff;color:#2d5a3d;border:none;padding:6px 16px;border-radius:5px;font-weight:600;cursor:pointer">🖨 Imprimir / Guardar PDF</button>
   <button onclick="window.close()" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.4);padding:6px 14px;border-radius:5px;cursor:pointer">Cerrar</button>
@@ -4296,22 +4314,22 @@ body{font-family:Arial,sans-serif;font-size:13px;color:#1a1917;line-height:1.7}
     <p>${EMPRESA.direccion}</p>
   </div>
 </div>
-<div class="fecha-doc">Alajuela, ${fechaDocFmt}</div>
-<div class="titulo">${titulo}</div>
-<div class="cuerpo">${cuerpoHTML}</div>
-<div class="cierre">
-  <p>Se extiende la presente a solicitud del interesado, para los fines legales que estime conveniente, en Alajuela, a los ${diaFmt} días del mes de ${mesFmt} del año ${anioFmt}.</p>
+<div class="pie">
+  ${EMPRESA.nombre} · ${EMPRESA.cedJuridica} · ${EMPRESA.direccion}
 </div>
-<div class="firmas">
-  <div class="firma-block">
+<div class="contenido">
+  <div class="fecha-doc">Alajuela, ${fechaDocFmt}</div>
+  <div class="titulo">${titulo}</div>
+  <div class="cuerpo">${cuerpoHTML}</div>
+  <div class="cierre">
+    <p>Se extiende la presente a solicitud del interesado, para los fines legales que estime conveniente, en Alajuela, a los ${diaFmt} días del mes de ${mesFmt} del año ${anioFmt}.</p>
+  </div>
+  <div class="firmas">
     <div class="firma-linea"><span class="lbl">Nombre:</span><span class="raya"></span></div>
     <div class="firma-linea"><span class="lbl">Puesto:</span><span class="raya"></span></div>
     <div class="firma-linea"><span class="lbl">Cédula:</span><span class="raya"></span></div>
     <div class="firma-linea"><span class="lbl">Firma:</span><span class="raya"></span></div>
   </div>
-</div>
-<div class="pie">
-  ${EMPRESA.nombre} · ${EMPRESA.cedJuridica} · ${EMPRESA.direccion}
 </div>
 <script>window.focus();<\/script>
 </body></html>`;
@@ -4324,15 +4342,13 @@ function generarConstanciaLaboral() {
   if (!emp) return;
   const fechaIng = FECHAS_INGRESO[empId] || '';
   const ant = calcularAntiguedad(fechaIng);
-  const jornada = inferirJornada(emp);
   const fechaIngFmt = fechaIng
     ? new Date(fechaIng+'T12:00:00').toLocaleDateString('es-CR',{day:'2-digit',month:'long',year:'numeric'})
     : '_______________';
 
   const cuerpo = `
     <p><strong>${EMPRESA.nombre}</strong>, cédula jurídica <strong>${EMPRESA.cedJuridica}</strong>, por medio de la presente hace constar que el(la) señor(a) <strong>${emp.nombre}</strong>, portador(a) de la cédula de identidad número <strong>${emp.cedula||'_______________'}</strong>, labora para esta empresa desde el <strong>${fechaIngFmt}</strong>, desempeñándose actualmente en el puesto de <strong>${emp.puesto||'_______________'}</strong>, con una antigüedad de <strong>${ant.texto}</strong>.</p>
-    <p>La jornada laboral del(la) colaborador(a) corresponde a <strong>${jornada}</strong>, y se encuentra activo(a) en planilla a la fecha de emisión de esta constancia.</p>
-    <p>La relación laboral se mantiene vigente y se rige bajo lo establecido por el Código de Trabajo de la República de Costa Rica.</p>`;
+    <p>El(la) colaborador(a) se encuentra activo(a) en planilla a la fecha de emisión de esta constancia, y la relación laboral se mantiene vigente conforme a lo establecido por el Código de Trabajo de la República de Costa Rica.</p>`;
 
   const fechaDoc = new Date();
   const html = htmlConstanciaBase('Constancia Laboral', cuerpo, emp, fechaDoc);
