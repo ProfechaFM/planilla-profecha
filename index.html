@@ -153,6 +153,7 @@ tr:hover td{background:var(--bg)}
     <div class="nav-item" data-nav="rebajos"><span>↓</span> Rebajos</div>
     <div class="nav-item" data-nav="incapacidades"><span>✚</span> Incapacidades</div>
     <div class="nav-item" data-nav="empleados"><span>☰</span> Empleados</div>
+    <div class="nav-item" data-nav="constancias"><span>✎</span> Constancias</div>
     <div class="nav-item" data-nav="config"><span>◈</span> Configuración</div>
     <div class="nav-item" data-nav="guia"><span>?</span> Guía de uso</div>
   </nav>
@@ -807,6 +808,101 @@ tr:hover td{background:var(--bg)}
 </div>
 
 <!-- CONFIG -->
+<!-- CONSTANCIAS -->
+<div id="page-constancias" class="page">
+  <div class="page-header">
+    <div class="page-title">Constancias</div>
+    <div class="page-sub">Generá constancias laborales y salariales con formato oficial. Las emisiones quedan registradas en Sheets.</div>
+  </div>
+
+  <div style="display:flex;gap:6px;margin-bottom:1rem;border-bottom:2px solid var(--border);padding-bottom:0">
+    <button id="cons-tab-laboral" class="btn btn-p" style="border-radius:6px 6px 0 0;border-bottom:none;font-size:12px" onclick="consTab('laboral')">Constancia laboral</button>
+    <button id="cons-tab-salarial" class="btn btn-s" style="border-radius:6px 6px 0 0;border-bottom:none;font-size:12px" onclick="consTab('salarial')">Constancia salarial</button>
+    <button id="cons-tab-historial" class="btn btn-s" style="border-radius:6px 6px 0 0;border-bottom:none;font-size:12px" onclick="consTab('historial')">Historial de emisiones</button>
+  </div>
+
+  <!-- TAB: Laboral -->
+  <div id="cons-tab-laboral-content">
+    <div class="card">
+      <div class="card-title">Generar constancia laboral</div>
+      <div class="page-sub" style="margin-bottom:1rem">Confirma vínculo laboral, fecha de ingreso, puesto y antigüedad. No menciona montos.</div>
+      <div class="form-grid">
+        <div class="fg">
+          <label>Empleado</label>
+          <select id="cons-lab-emp" onchange="actualizarPreviewConsLab()" style="font-size:13px;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--rs);background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif">
+            <option value="">Seleccionar...</option>
+          </select>
+        </div>
+      </div>
+      <div id="cons-lab-preview" style="margin-top:1rem;padding:14px;background:var(--surface2);border-radius:8px;font-size:13px;display:none"></div>
+      <div style="margin-top:1rem;display:flex;gap:8px">
+        <button class="btn btn-p" onclick="generarConstanciaLaboral()">Generar constancia</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: Salarial -->
+  <div id="cons-tab-salarial-content" style="display:none">
+    <div class="card">
+      <div class="card-title">Generar constancia salarial</div>
+      <div class="page-sub" style="margin-bottom:1rem">Incluye desglose mensual con salario ordinario y otros ingresos (vacaciones, licencias). Promedia el período seleccionado.</div>
+      <div class="form-grid">
+        <div class="fg">
+          <label>Empleado</label>
+          <select id="cons-sal-emp" onchange="_previewSalDebounced()" style="font-size:13px;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--rs);background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif">
+            <option value="">Seleccionar...</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label>Período (meses calendario hacia atrás)</label>
+          <select id="cons-sal-meses" onchange="_previewSalDebounced()" style="font-size:13px;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--rs);background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif">
+            <option value="1">1 mes</option>
+            <option value="2">2 meses</option>
+            <option value="3" selected>3 meses</option>
+            <option value="4">4 meses</option>
+            <option value="5">5 meses</option>
+            <option value="6">6 meses</option>
+            <option value="7">7 meses</option>
+            <option value="8">8 meses</option>
+            <option value="9">9 meses</option>
+            <option value="10">10 meses</option>
+            <option value="11">11 meses</option>
+            <option value="12">12 meses</option>
+          </select>
+        </div>
+      </div>
+      <div id="cons-sal-preview" style="margin-top:1rem;padding:14px;background:var(--surface2);border-radius:8px;font-size:13px;display:none"></div>
+      <div style="margin-top:1rem;display:flex;gap:8px">
+        <button class="btn btn-p" onclick="generarConstanciaSalarial()">Generar constancia</button>
+        <button class="btn btn-s" onclick="actualizarPreviewConsSal()">Recalcular preview</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: Historial -->
+  <div id="cons-tab-historial-content" style="display:none">
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:8px">
+        <div class="card-title" style="margin-bottom:0">Historial de constancias emitidas</div>
+        <div style="display:flex;gap:8px">
+          <select id="cons-hist-emp" onchange="renderConstanciasHistorial()" style="font-size:12px;padding:5px 8px;border:1px solid var(--border2);border-radius:var(--rs);background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif">
+            <option value="">Todos los empleados</option>
+          </select>
+          <button class="btn btn-s" style="font-size:11px" onclick="exportarConstanciasExcel()">Exportar Excel</button>
+        </div>
+      </div>
+      <div class="tab-wrap">
+        <table><thead><tr>
+          <th>Fecha emisión</th><th>ID</th><th>Empleado</th>
+          <th>Tipo</th><th>Período</th><th>Emitido por</th>
+        </tr></thead>
+        <tbody id="cons-hist-tbody"><tr><td colspan="6" style="text-align:center;color:var(--text3);padding:2rem">Sin emisiones registradas</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="page-config" class="page">
   <div class="page-header"><div class="page-title">Configuración</div><div class="page-sub">Conexión con Google Sheets y parámetros legales.</div></div>
   <div class="card">
@@ -1096,6 +1192,7 @@ function nav(id,el){
   if(id==='vacaciones'){poblarVacEmpSelect();renderVacSaldo();}
   if(id==='rebajos')renderRebajosActivos();
   if(id==='incapacidades'){poblarIncEmpSelect();actualizarPreviewInc();}
+  if(id==='constancias')consTab('laboral');
   if(id==='config')initConfigUI();
 }
 
@@ -1992,7 +2089,8 @@ function actualizarIndicadorGuardado(){
 async function autoGuardarHorario(){
   if(!accessToken)return;
   const wk=weekKey();const wData=horarioActual[wk]||{};
-  const header=[`Semana: ${weekLabel()}`,...DAYS.map((d,i)=>feriados[i]?d+' FERIADO':d),'','','','','','',''];
+  const etiqueta=weekLabel();
+  const header=[`Semana: ${etiqueta}`,...DAYS.map((d,i)=>feriados[i]?d+' FERIADO':d),'','','','','','',''];
   const rows=Object.keys(wData).filter(k=>!k.endsWith('_fer')).map(empId=>{
     const eh=wData[empId];const emp=empleados.find(e=>e.id===empId);
     const row=[empId,emp?emp.nombre:(eh.nombre||'')];
@@ -2064,14 +2162,38 @@ async function guardarRegistro(){
   if(!accessToken){toast('Conectate primero en Configuración','warn');return;}
   if(!resultados.length){toast('Calculá la planilla primero','warn');return;}
   const etiqueta=weekLabel();
-  const header=[`Semana del ${etiqueta}`,'','','','',''];
+  // Encabezado con 8 columnas para soportar el desglose nuevo
+  const header=[`Semana del ${etiqueta}`,'','','','','','',''];
   const rows=resultados.filter(r=>!r.sinPerfil).map(r=>{
-    // r.bruto y r.rebajoCC ya incluyen vacaciones canceladas y licencias maternidad/goce
-    // porque aplicarVacacionesAlCalculo y aplicarIncapacidadesAlCalculo los sumaron al res.
-    // Neto registrado = neto + rebajos de cuotas, porque los rebajos no son salario
-    // (no deben reducir la base para aguinaldo ni liquidaciones — Código de Trabajo CR)
+    // Neto registrado = neto + rebajos de cuotas (los rebajos no son salario, no reducen base aguinaldo)
     const netoReal = Math.round(r.neto + (r.rebajoRebajo||0));
-    return [r.empId, r.nombre, r.emp.cuenta||'N/A', netoReal, Math.round(r.rebajoCC), Math.round(r.bruto)];
+    // Desglose ordinario vs otros — cálculo directo desde la fuente para evitar drift:
+    //  - Vacaciones canceladas → "vacaciones"
+    //  - Licencia maternidad → "maternidad"
+    //  - Licencia con goce → "goce"
+    //  - Incapacidad CCSS normal → NO se cuenta como ingreso del patrono (es subsidio CCSS)
+    const otros = [];
+    let otrosBruto = 0;
+    const vacTotal = (r.vacEf||0) + (r.vacTr||0);
+    if(vacTotal>0) { otros.push({tipo:'vacaciones', monto:Math.round(vacTotal)}); otrosBruto += vacTotal; }
+    if(r.incapacidades && r.incapacidades.length){
+      r.incapacidades.forEach(i=>{
+        if(i.tipo==='maternidad' || i.tipo==='goce') {
+          const b = i.bruto || i.monto || 0;
+          otros.push({tipo: i.tipo, monto: Math.round(b)});
+          otrosBruto += b;
+        }
+        // incapacidad CCSS normal NO se incluye (no es salario del patrono — Art. 84 CT)
+      });
+    }
+    // brutoOrdinario calculado directamente: bruto total - otros (lo que es salario por horas)
+    // Protección: si por alguna razón otros > bruto, mínimo 0
+    const brutoOrdinario = Math.max(0, Math.round(r.bruto - otrosBruto));
+    const otrosJSON = otros.length ? JSON.stringify(otros) : '';
+    // Columnas: ID, Nombre, Cuenta, Neto, CCSS, Bruto_Total, Bruto_Ordinario, Otros_JSON
+    return [r.empId, r.nombre, r.emp.cuenta||'N/A', netoReal,
+            Math.round(r.rebajoCC), Math.round(r.bruto),
+            brutoOrdinario, otrosJSON];
   });
   try{
     await sobreescribirOAgregar('Registro Semanal',etiqueta,header,rows);
@@ -3129,7 +3251,8 @@ function guardarRebajo() {
   const concepto = document.getElementById('reb-concepto')?.value.trim();
   const total = parseFloat(document.getElementById('reb-total')?.value) || 0;
   const cuota = parseFloat(document.getElementById('reb-cuota')?.value) || 0;
-  const fecha = document.getElementById('reb-fecha')?.value || new Date().toISOString().split('T')[0];
+  const fechaInput = document.getElementById('reb-fecha')?.value;
+  const fecha = fechaInput || new Date().toISOString().split('T')[0];
   const nota = document.getElementById('reb-nota-reg')?.value || '';
 
   if (!empId) { toast('Seleccioná un empleado', 'warn'); return; }
@@ -3137,6 +3260,10 @@ function guardarRebajo() {
   if (total <= 0) { toast('El monto total debe ser mayor a 0', 'warn'); return; }
   if (cuota <= 0) { toast('La cuota debe ser mayor a 0', 'warn'); return; }
   if (cuota > total) { toast('La cuota no puede superar el monto total', 'warn'); return; }
+  // Validar fecha: si no se ingresó, usamos hoy. Si se ingresó, debe ser válida.
+  if (fechaInput && isNaN(new Date(fechaInput + 'T12:00:00').getTime())) {
+    toast('La fecha de inicio del rebajo no es válida', 'warn'); return;
+  }
 
   const emp = empleados.find(e => e.id === empId);
   const rebajo = {
@@ -3212,6 +3339,8 @@ function aplicarVacacionesAlCalculo() {
       else { res.netoEf += r.monto; res.vacEf = (res.vacEf||0) + r.monto; }
       res.neto += r.monto;
     } else {
+      // Empleado solo con vacaciones esta semana (sin horario).
+      // Las vacaciones canceladas NO llevan CCSS (Art. 157 CT), así que bruto = neto = monto.
       resultados.push({ emp, empId: r.empId, nombre: emp.nombre, hNorm:0,hExtra:0,hDoble:0,hExtraDoble:0, descTotal:0,fijo:0, bruto:r.monto, rebajoCC:0, neto:r.monto,
         netoEf: pago==='transferencia'?0:r.monto, netoTr: pago==='transferencia'?r.monto:0,
         isSplit:false, sinPerfil:false, soloVacaciones:true, vacaciones:[item],
@@ -3246,7 +3375,14 @@ function aplicarIncapacidadesAlCalculo() {
       else { res.netoEf += r.monto; res.incEf = (res.incEf||0) + r.monto; }
       res.neto += r.monto;
     } else {
-      resultados.push({ emp, empId: r.empId, nombre: emp.nombre, hNorm:0,hExtra:0,hDoble:0,hExtraDoble:0, descTotal:0,fijo:0, bruto:r.monto, rebajoCC:0, neto:r.monto,
+      // Empleado solo con incapacidad/licencia esta semana (sin horario).
+      // Para maternidad/goce: el bruto es el ingreso completo, hay CCSS y el neto es bruto - CCSS.
+      // Para incapacidad CCSS normal: no hay CCSS del patrono, bruto = neto = monto (Art. 84 CT).
+      const esIncCCSS = tipo === 'incapacidad';
+      const brutoReal   = esIncCCSS ? r.monto : (r.bruto || r.monto);
+      const rebajoCCReal= esIncCCSS ? 0 : (r.rebajoCC || 0);
+      resultados.push({ emp, empId: r.empId, nombre: emp.nombre, hNorm:0,hExtra:0,hDoble:0,hExtraDoble:0, descTotal:0,fijo:0,
+        bruto: brutoReal, rebajoCC: rebajoCCReal, neto: r.monto,
         netoEf: pago==='transferencia'?0:r.monto, netoTr: pago==='transferencia'?r.monto:0,
         isSplit:false, sinPerfil:false, soloIncapacidad:true, incapacidades:[item],
         incEf: pago==='transferencia'?0:r.monto, incTr: pago==='transferencia'?r.monto:0 });
@@ -3317,9 +3453,14 @@ function exportarRebajosExcel() {
 // SINCRONIZACIÓN CON GOOGLE SHEETS
 // ══════════════════════════════════════════════════════════════════
 async function sincronizarDesdeSheets() {
-  try { await cargarVacacionesSheets(); } catch(e) { console.warn('Vac sync:', e.message); }
-  try { await cargarRebajosSheets();    } catch(e) { console.warn('Reb sync:', e.message); }
-  try { await cargarIncapacidadesSheets(); } catch(e) { console.warn('Inc sync:', e.message); }
+  // Cargas en paralelo — Promise.allSettled para que un error no detenga las demás
+  const tareas = [
+    cargarVacacionesSheets().catch(e => console.warn('Vac sync:', e.message)),
+    cargarRebajosSheets().catch(e => console.warn('Reb sync:', e.message)),
+    cargarIncapacidadesSheets().catch(e => console.warn('Inc sync:', e.message)),
+    cargarConstanciasSheets().catch(e => console.warn('Cons sync:', e.message))
+  ];
+  await Promise.allSettled(tareas);
 }
 
 // ── VACACIONES ─────────────────────────────────────────────────────
@@ -3371,6 +3512,8 @@ async function sincronizarAjustesVacSheets() {
 
 async function reescribirVacacionesSheets() {
   try {
+    // Limpiar la hoja primero para evitar filas remanentes si el nuevo array es más corto
+    await sheetsReq('POST','/values/'+encodeURIComponent('Vacaciones!A1:O2000')+':clear', null);
     const rows = [['Fecha_Reg','ID_Emp','Nombre','Tipo','Dias','Monto','Pago','Fecha_Ini','Fecha_Fin','Periodo','PeriodoLabel','Nota','GrupoId','ID_Registro','SemanaCalculo']];
     vacRegistros.forEach(r => rows.push([r.fecha, r.empId, r.nombre, r.tipo, r.dias, Math.round(r.monto), r.pago, r.fechaIni||'', r.fechaFin||'', r.periodo||'', r.periodoLabel||'', r.nota||'', r.grupoId||'', r.id, r.semanaCalculo||'']));
     await sheetsWrite('Vacaciones!A1', rows);
@@ -3437,6 +3580,8 @@ async function guardarHistorialRebajoSheets(e) {
 
 async function reescribirRebajosSheets() {
   try {
+    // Limpiar la hoja primero para evitar filas remanentes
+    await sheetsReq('POST','/values/'+encodeURIComponent('Rebajos!A1:K500')+':clear', null);
     const rows = [['ID_Rebajo','Fecha','ID_Emp','Nombre','Concepto','Total','Cuota','Pagado','Nota','Activo','SemanaCalculo']];
     rebajos.forEach(r => rows.push([r.id, r.fecha||'', r.empId, r.nombre, r.concepto, r.total, r.cuota, r.pagado, r.nota||'', r.activo ? 'TRUE' : 'FALSE', r.semanaCalculo||'']));
     await sheetsWrite('Rebajos!A1', rows);
@@ -3476,6 +3621,8 @@ async function guardarIncEnSheets(r) {
 
 async function reescribirIncapacidadesSheets() {
   try {
+    // Limpiar la hoja primero para evitar filas remanentes
+    await sheetsReq('POST','/values/'+encodeURIComponent('Incapacidades!A1:Q500')+':clear', null);
     const rows = [['Fecha_Reg','ID_Emp','Nombre','N_Caso','Fecha_Ini','Fecha_Fin','Dias_Pagar','Monto_Neto','Pago','Mes','Nota','ID_Registro','SemanaCalculo','Tipo','Bruto','RebajoCC','Pct_Goce']];
     incRegistros.forEach(r => rows.push([
       r.fecha, r.empId, r.nombre, r.caso||'', r.fechaIni, r.fechaFin,
@@ -3830,6 +3977,527 @@ function exportarIncExcel() {
 // Permite que la app funcione con datos del caché aunque el token de Google
 // haya expirado o no haya conexión a Sheets.
 // ══════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════
+// CONSTANCIAS — Módulo de constancias laborales y salariales
+// ══════════════════════════════════════════════════════════════════
+
+const EMPRESA = {
+  nombre: 'PROFECHA S.A.',
+  nombreComercial: 'Restaurante La Fiesta de Maíz',
+  cedJuridica: '3-101-173484',
+  direccion: 'Contiguo a la Iglesia Católica de La Garita, Alajuela, Alajuela'
+};
+
+let constanciasEmitidas = [];
+
+// ── UI: tabs ──────────────────────────────────────────────────────
+function consTab(tab) {
+  ['laboral','salarial','historial'].forEach(t => {
+    const c = document.getElementById('cons-tab-'+t+'-content');
+    const b = document.getElementById('cons-tab-'+t);
+    if (c) c.style.display = t === tab ? '' : 'none';
+    if (b) {
+      b.className = t === tab ? 'btn btn-p' : 'btn btn-s';
+      b.style.cssText = 'border-radius:6px 6px 0 0;border-bottom:none;font-size:12px';
+    }
+  });
+  if (tab === 'laboral')   poblarConsEmpSelect('cons-lab-emp');
+  if (tab === 'salarial')  poblarConsEmpSelect('cons-sal-emp');
+  if (tab === 'historial') { poblarConsHistEmpSelect(); renderConstanciasHistorial(); }
+}
+
+function poblarConsEmpSelect(selId) {
+  const sel = document.getElementById(selId);
+  if (!sel) return;
+  const actual = sel.value;
+  sel.innerHTML = '<option value="">Seleccionar...</option>' +
+    empleados.filter(e => e.id !== '999').map(e =>
+      `<option value="${e.id}"${e.id === actual ? ' selected' : ''}>${e.id} — ${e.nombre}</option>`
+    ).join('');
+}
+
+function poblarConsHistEmpSelect() {
+  const sel = document.getElementById('cons-hist-emp');
+  if (!sel) return;
+  const actual = sel.value;
+  sel.innerHTML = '<option value="">Todos los empleados</option>' +
+    empleados.filter(e => e.id !== '999').map(e =>
+      `<option value="${e.id}"${e.id === actual ? ' selected' : ''}>${e.nombre}</option>`
+    ).join('');
+}
+
+// ── Helpers de cálculo ────────────────────────────────────────────
+function calcularAntiguedad(fechaIngreso) {
+  if (!fechaIngreso) return { anios: 0, meses: 0, texto: 'No registrada' };
+  const ing = new Date(fechaIngreso + 'T12:00:00');
+  if (isNaN(ing)) return { anios: 0, meses: 0, texto: 'Fecha inválida' };
+  const hoy = new Date();
+  let anios = hoy.getFullYear() - ing.getFullYear();
+  let meses = hoy.getMonth() - ing.getMonth();
+  if (hoy.getDate() < ing.getDate()) meses--;
+  if (meses < 0) { anios--; meses += 12; }
+  let txt = '';
+  if (anios > 0) txt += `${anios} año${anios!==1?'s':''}`;
+  if (anios > 0 && meses > 0) txt += ' y ';
+  if (meses > 0) txt += `${meses} mes${meses!==1?'es':''}`;
+  if (!txt) txt = 'Menos de 1 mes';
+  return { anios, meses, texto: txt };
+}
+
+function inferirJornada(emp) {
+  // Estimar tipo de jornada por horas habituales en última semana con datos
+  const wk = weekKey();
+  const wData = horarioActual[wk] || {};
+  const dias = wData[emp.id];
+  if (!dias) return 'Tiempo completo';
+  let horasSem = 0;
+  for (let d=0; d<7; d++) {
+    const dd = dias['d'+d];
+    if (dd && dd.entrada !== undefined && dd.salida !== undefined) {
+      const h = dd.salida - dd.entrada;
+      if (h > 0) horasSem += h;
+    }
+  }
+  if (horasSem === 0) return 'Tiempo completo';
+  if (horasSem >= 44) return 'Tiempo completo (48h semanales)';
+  if (horasSem >= 30) return 'Tres cuartos de tiempo';
+  return 'Medio tiempo';
+}
+
+function nombreMes(idx) {
+  return ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Setiembre','Octubre','Noviembre','Diciembre'][idx];
+}
+
+// ── Preview constancia laboral ────────────────────────────────────
+function actualizarPreviewConsLab() {
+  const empId = document.getElementById('cons-lab-emp')?.value;
+  const prev = document.getElementById('cons-lab-preview');
+  if (!empId || !prev) { if(prev) prev.style.display = 'none'; return; }
+  const emp = empleados.find(e => e.id === empId);
+  if (!emp) return;
+  const fechaIng = FECHAS_INGRESO[empId] || '';
+  const ant = calcularAntiguedad(fechaIng);
+  const jornada = inferirJornada(emp);
+  prev.style.display = '';
+  prev.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem">
+      <div><div style="font-size:11px;color:var(--text3)">Empleado</div><div style="font-weight:600">${emp.nombre}</div></div>
+      <div><div style="font-size:11px;color:var(--text3)">Cédula</div><div style="font-weight:600">${emp.cedula||'<span style=\"color:var(--warn)\">Sin cédula registrada</span>'}</div></div>
+      <div><div style="font-size:11px;color:var(--text3)">Puesto</div><div style="font-weight:600">${emp.puesto||'—'}</div></div>
+      <div><div style="font-size:11px;color:var(--text3)">Fecha de ingreso</div><div style="font-weight:600">${fechaIng||'<span style=\"color:var(--warn)\">No registrada</span>'}</div></div>
+      <div><div style="font-size:11px;color:var(--text3)">Antigüedad</div><div style="font-weight:600;color:var(--accent)">${ant.texto}</div></div>
+      <div><div style="font-size:11px;color:var(--text3)">Jornada</div><div style="font-weight:600">${jornada}</div></div>
+    </div>`;
+}
+
+// ── Preview constancia salarial ───────────────────────────────────
+async function actualizarPreviewConsSal() {
+  const empId = document.getElementById('cons-sal-emp')?.value;
+  const meses = parseInt(document.getElementById('cons-sal-meses')?.value) || 3;
+  const prev = document.getElementById('cons-sal-preview');
+  if (!empId || !prev) { if(prev) prev.style.display = 'none'; return; }
+  const emp = empleados.find(e => e.id === empId);
+  if (!emp) return;
+  prev.style.display = '';
+  prev.innerHTML = '<div style="color:var(--text3);font-style:italic">Calculando ingresos...</div>';
+
+  try {
+    const datos = await calcularIngresosPeriodo(empId, meses);
+    if (!datos.mesesData.length) {
+      prev.innerHTML = '<div style="color:var(--warn)">No hay registros de planilla para este empleado en el período seleccionado.</div>';
+      return;
+    }
+    const filas = datos.mesesData.map(m => {
+      const otrosTxt = m.otros.length
+        ? m.otros.map(o => `${o.tipo}: ${fmtMon(o.monto)}`).join('<br>')
+        : '—';
+      return `<tr>
+        <td>${m.label}</td>
+        <td style="text-align:right;font-family:'DM Mono',monospace">${fmtMon(m.ordinario)}</td>
+        <td style="font-size:11px">${otrosTxt}</td>
+        <td style="text-align:right;font-family:'DM Mono',monospace;font-weight:600">${fmtMon(m.total)}</td>
+      </tr>`;
+    }).join('');
+    prev.innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:.5rem;margin-bottom:.75rem">
+        <div><div style="font-size:11px;color:var(--text3)">Empleado</div><div style="font-weight:600">${emp.nombre}</div></div>
+        <div><div style="font-size:11px;color:var(--text3)">Período</div><div style="font-weight:600">${datos.periodoTexto}</div></div>
+      </div>
+      <table style="width:100%;font-size:12px;border-collapse:collapse">
+        <thead><tr style="background:var(--surface);border-bottom:1px solid var(--border2)">
+          <th style="text-align:left;padding:6px">Mes</th>
+          <th style="text-align:right;padding:6px">Salario ordinario</th>
+          <th style="text-align:left;padding:6px">Otros ingresos</th>
+          <th style="text-align:right;padding:6px">Total</th>
+        </tr></thead>
+        <tbody>${filas}</tbody>
+        <tfoot><tr style="border-top:2px solid var(--border2);font-weight:700;background:var(--surface)">
+          <td style="padding:6px">PROMEDIO</td>
+          <td style="text-align:right;padding:6px;font-family:'DM Mono',monospace">${fmtMon(datos.promedioOrdinario)}</td>
+          <td style="padding:6px">${datos.promedioOtros>0?fmtMon(datos.promedioOtros):'—'}</td>
+          <td style="text-align:right;padding:6px;font-family:'DM Mono',monospace;color:var(--accent)">${fmtMon(datos.promedioTotal)}</td>
+        </tr></tfoot>
+      </table>`;
+  } catch(e) {
+    prev.innerHTML = `<div style="color:var(--danger)">Error: ${e.message}</div>`;
+  }
+}
+
+// Versión debounced del preview salarial — evita múltiples lecturas a Sheets
+// cuando el usuario cambia rápidamente de empleado o de período.
+const _previewSalDebounced = debounce(actualizarPreviewConsSal, 350);
+
+// ── Lee Registro Semanal y agrupa por mes calendario ─────────────
+async function calcularIngresosPeriodo(empId, meses) {
+  if (!accessToken) throw new Error('Conectate a Sheets primero');
+  // Calcular rango de meses calendario completos
+  const hoy = new Date();
+  const finMes = new Date(hoy.getFullYear(), hoy.getMonth(), 0); // último día del mes anterior
+  const iniMes = new Date(finMes.getFullYear(), finMes.getMonth() - meses + 1, 1);
+  // Leer Registro Semanal completo
+  const d = await sheetsGet('Registro Semanal!A1:H4000');
+  const rows = d.values || [];
+  // Acumular por mes (clave: 'YYYY-MM')
+  const acum = {}; // {'2026-04': {ordinario, otros:{tipo:monto}}}
+  for (let i=0; i<rows.length; i++) {
+    const cell = rows[i] && rows[i][0];
+    if (!cell || !String(cell).startsWith('Semana')) continue;
+    const etiqueta = String(cell).replace('Semana del ','');
+    const fechaSemana = agParsearFechaEtiqueta(etiqueta);
+    if (!fechaSemana) continue;
+    if (fechaSemana < iniMes || fechaSemana > finMes) continue;
+    const mesKey = fechaSemana.getFullYear() + '-' + String(fechaSemana.getMonth()+1).padStart(2,'0');
+    if (!acum[mesKey]) acum[mesKey] = { ordinario: 0, otros: {} };
+    // Buscar filas del empleado bajo este encabezado
+    for (let j=i+1; j<rows.length; j++) {
+      const r = rows[j];
+      if (!r || !r[0]) break; // fin de bloque
+      if (String(r[0]).startsWith('Semana')) break;
+      if (String(r[0]) !== String(empId)) continue;
+      // Columnas: ID(0) Nombre(1) Cuenta(2) Neto(3) CCSS(4) Bruto_Total(5) Bruto_Ordinario(6) Otros_JSON(7)
+      const brutoTotal = parseFloat(r[5]) || 0;
+      const brutoOrd = r[6] !== undefined && r[6] !== '' ? parseFloat(r[6]) || 0 : null;
+      const otrosJSON = r[7] || '';
+      if (brutoOrd !== null) {
+        // Registro nuevo (con desglose)
+        acum[mesKey].ordinario += brutoOrd;
+        if (otrosJSON) {
+          try {
+            const otros = JSON.parse(otrosJSON);
+            otros.forEach(o => {
+              acum[mesKey].otros[o.tipo] = (acum[mesKey].otros[o.tipo]||0) + (o.monto||0);
+            });
+          } catch(e) {}
+        }
+      } else {
+        // Registro viejo (sin desglose): todo cuenta como ordinario
+        acum[mesKey].ordinario += brutoTotal;
+      }
+    }
+  }
+  // Convertir a array ordenado por mes
+  const mesesData = Object.keys(acum).sort().map(k => {
+    const [y, m] = k.split('-');
+    const a = acum[k];
+    const otrosArr = Object.entries(a.otros).map(([tipo, monto]) => {
+      const labels = { vacaciones: 'Vacaciones', maternidad: 'Lic. Maternidad', goce: 'Lic. con Goce' };
+      return { tipo: labels[tipo] || tipo, monto };
+    });
+    const otrosTotal = otrosArr.reduce((s,o)=>s+o.monto, 0);
+    return {
+      key: k,
+      label: nombreMes(parseInt(m)-1) + ' ' + y,
+      ordinario: a.ordinario,
+      otros: otrosArr,
+      otrosTotal,
+      total: a.ordinario + otrosTotal
+    };
+  });
+  const sumOrd = mesesData.reduce((s,m)=>s+m.ordinario, 0);
+  const sumOtros = mesesData.reduce((s,m)=>s+m.otrosTotal, 0);
+  const n = mesesData.length || 1;
+  return {
+    mesesData,
+    promedioOrdinario: sumOrd / n,
+    promedioOtros: sumOtros / n,
+    promedioTotal: (sumOrd + sumOtros) / n,
+    periodoTexto: mesesData.length ? `${mesesData[0].label} a ${mesesData[mesesData.length-1].label}` : 'Sin datos',
+    fechaIni: iniMes,
+    fechaFin: finMes
+  };
+}
+
+// ── Generadores de PDF ────────────────────────────────────────────
+function htmlConstanciaBase(titulo, cuerpoHTML, emp, fechaDoc) {
+  const fechaDocFmt = fechaDoc.toLocaleDateString('es-CR',{day:'2-digit',month:'long',year:'numeric'});
+  const diaFmt  = fechaDoc.getDate();
+  const mesFmt  = nombreMes(fechaDoc.getMonth()).toLowerCase();
+  const anioFmt = fechaDoc.getFullYear();
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${titulo}</title>
+<style>
+@page{margin:2cm}
+body{font-family:Arial,sans-serif;font-size:13px;color:#1a1917;line-height:1.7}
+.hdr{display:flex;align-items:center;gap:1.5rem;border-bottom:3px solid #2d5a3d;padding-bottom:1rem;margin-bottom:1.5rem}
+.logo{width:90px;height:90px;object-fit:contain;border-radius:8px}
+.hdr-info h1{margin:0;font-size:22px;color:#2d5a3d}
+.hdr-info p{margin:2px 0;font-size:11px;color:#555}
+.hdr-info .nombre-comercial{font-size:12px;font-style:italic;color:#666}
+.titulo{text-align:center;font-size:18px;font-weight:700;text-transform:uppercase;letter-spacing:2px;margin:1.8rem 0 1.5rem;color:#2d5a3d}
+.fecha-doc{text-align:right;font-size:12px;color:#666;margin-bottom:1rem}
+.cuerpo{text-align:justify;margin:1rem 0}
+.cuerpo p{margin:0.8rem 0}
+.tabla-ingresos{width:100%;border-collapse:collapse;margin:1rem 0;font-size:12px}
+.tabla-ingresos th{background:#2d5a3d;color:#fff;padding:8px;text-align:left;font-weight:600}
+.tabla-ingresos td{padding:7px 8px;border-bottom:1px solid #e0e0e0}
+.tabla-ingresos .num{text-align:right;font-family:'Courier New',monospace}
+.tabla-ingresos tfoot td{background:#f5f4f0;font-weight:700;border-top:2px solid #2d5a3d;border-bottom:none}
+.cierre{margin-top:1.5rem;text-align:justify}
+.firmas{display:grid;grid-template-columns:1fr 1fr;gap:3rem;margin-top:4rem}
+.firma-block{text-align:center}
+.firma-linea{border-top:1px solid #333;padding-top:.5rem;margin-top:2.5rem;font-size:11px}
+.firma-linea .lbl{color:#888;font-size:10px;text-transform:uppercase;letter-spacing:.5px}
+.pie{margin-top:3rem;padding-top:1rem;border-top:1px solid #e0e0e0;font-size:10px;color:#888;text-align:center}
+@media print{.noprint{display:none}}
+</style></head><body>
+<div class="noprint" style="background:#2d5a3d;color:#fff;padding:.6rem 1rem;display:flex;gap:1rem;align-items:center;margin-bottom:1rem;border-radius:6px">
+  <span style="flex:1">Constancia lista para imprimir o descargar como PDF</span>
+  <button onclick="window.print()" style="background:#fff;color:#2d5a3d;border:none;padding:6px 16px;border-radius:5px;font-weight:600;cursor:pointer">🖨 Imprimir / Guardar PDF</button>
+  <button onclick="window.close()" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.4);padding:6px 14px;border-radius:5px;cursor:pointer">Cerrar</button>
+</div>
+<div class="hdr">
+  <img class="logo" src="${LOGO_URL}" onerror="this.style.display='none'">
+  <div class="hdr-info">
+    <h1>${EMPRESA.nombre}</h1>
+    <p class="nombre-comercial">${EMPRESA.nombreComercial}</p>
+    <p><strong>Cédula Jurídica:</strong> ${EMPRESA.cedJuridica}</p>
+    <p>${EMPRESA.direccion}</p>
+  </div>
+</div>
+<div class="fecha-doc">Alajuela, ${fechaDocFmt}</div>
+<div class="titulo">${titulo}</div>
+<div class="cuerpo">${cuerpoHTML}</div>
+<div class="cierre">
+  <p>Se extiende la presente a solicitud del interesado, para los fines legales que estime conveniente, en Alajuela, a los ${diaFmt} días del mes de ${mesFmt} del año ${anioFmt}.</p>
+</div>
+<div class="firmas">
+  <div class="firma-block">
+    <div class="firma-linea">
+      <div class="lbl">Nombre</div>
+      <div style="margin-top:1.2rem"><span class="lbl">Firma</span></div>
+    </div>
+  </div>
+  <div class="firma-block">
+    <div class="firma-linea">
+      <div class="lbl">Cédula</div>
+      <div style="margin-top:1.2rem"><span class="lbl">Puesto</span></div>
+    </div>
+  </div>
+</div>
+<div class="pie">
+  ${EMPRESA.nombre} · ${EMPRESA.cedJuridica} · ${EMPRESA.direccion}
+</div>
+<script>window.focus();<\/script>
+</body></html>`;
+}
+
+function generarConstanciaLaboral() {
+  const empId = document.getElementById('cons-lab-emp')?.value;
+  if (!empId) { toast('Seleccioná un empleado','warn'); return; }
+  const emp = empleados.find(e => e.id === empId);
+  if (!emp) return;
+  const fechaIng = FECHAS_INGRESO[empId] || '';
+  const ant = calcularAntiguedad(fechaIng);
+  const jornada = inferirJornada(emp);
+  const fechaIngFmt = fechaIng
+    ? new Date(fechaIng+'T12:00:00').toLocaleDateString('es-CR',{day:'2-digit',month:'long',year:'numeric'})
+    : '_______________';
+
+  const cuerpo = `
+    <p><strong>${EMPRESA.nombre}</strong>, cédula jurídica <strong>${EMPRESA.cedJuridica}</strong>, por medio de la presente hace constar que el(la) señor(a) <strong>${emp.nombre}</strong>, portador(a) de la cédula de identidad número <strong>${emp.cedula||'_______________'}</strong>, labora para esta empresa desde el <strong>${fechaIngFmt}</strong>, desempeñándose actualmente en el puesto de <strong>${emp.puesto||'_______________'}</strong>, con una antigüedad de <strong>${ant.texto}</strong>.</p>
+    <p>La jornada laboral del(la) colaborador(a) corresponde a <strong>${jornada}</strong>, y se encuentra activo(a) en planilla a la fecha de emisión de esta constancia.</p>
+    <p>La relación laboral se mantiene vigente y se rige bajo lo establecido por el Código de Trabajo de la República de Costa Rica.</p>`;
+
+  const fechaDoc = new Date();
+  const html = htmlConstanciaBase('Constancia Laboral', cuerpo, emp, fechaDoc);
+  const win = window.open('','_blank','width=900,height=750');
+  if (!win) { toast('Permitir ventanas emergentes para ver la constancia','warn',5000); return; }
+  win.document.open(); win.document.write(html); win.document.close();
+
+  registrarEmisionConstancia({
+    tipo: 'Laboral',
+    empId, nombre: emp.nombre,
+    periodo: '—',
+    fechaDoc: fechaDoc.toISOString().split('T')[0]
+  });
+}
+
+async function generarConstanciaSalarial() {
+  const empId = document.getElementById('cons-sal-emp')?.value;
+  const meses = parseInt(document.getElementById('cons-sal-meses')?.value) || 3;
+  if (!empId) { toast('Seleccioná un empleado','warn'); return; }
+  if (!accessToken) { toast('Conectate a Sheets para leer historial','warn'); return; }
+  const emp = empleados.find(e => e.id === empId);
+  if (!emp) return;
+
+  toast('Calculando ingresos del período...','ok',2000);
+  let datos;
+  try {
+    datos = await calcularIngresosPeriodo(empId, meses);
+  } catch(e) {
+    toast('Error leyendo Sheets: '+e.message,'err'); return;
+  }
+  if (!datos.mesesData.length) {
+    toast('No hay registros de planilla en el período seleccionado','warn'); return;
+  }
+
+  const fechaIng = FECHAS_INGRESO[empId] || '';
+  const fechaIngFmt = fechaIng
+    ? new Date(fechaIng+'T12:00:00').toLocaleDateString('es-CR',{day:'2-digit',month:'long',year:'numeric'})
+    : '_______________';
+
+  const filasHTML = datos.mesesData.map(m => {
+    const otrosTxt = m.otros.length
+      ? m.otros.map(o=>`${o.tipo}: ₡${Math.round(o.monto).toLocaleString('es-CR')}`).join('<br>')
+      : '—';
+    return `<tr>
+      <td>${m.label}</td>
+      <td class="num">${fmtMon(m.ordinario)}</td>
+      <td>${otrosTxt}</td>
+      <td class="num">${fmtMon(m.total)}</td>
+    </tr>`;
+  }).join('');
+
+  const cuerpo = `
+    <p><strong>${EMPRESA.nombre}</strong>, cédula jurídica <strong>${EMPRESA.cedJuridica}</strong>, por medio de la presente hace constar que el(la) señor(a) <strong>${emp.nombre}</strong>, portador(a) de la cédula de identidad número <strong>${emp.cedula||'_______________'}</strong>, labora para esta empresa desde el <strong>${fechaIngFmt}</strong> en el puesto de <strong>${emp.puesto||'_______________'}</strong>, percibiendo durante los últimos ${meses} mes${meses!==1?'es':''} calendario los siguientes ingresos:</p>
+
+    <table class="tabla-ingresos">
+      <thead><tr><th>Mes</th><th class="num">Salario ordinario</th><th>Otros ingresos</th><th class="num">Total mensual</th></tr></thead>
+      <tbody>${filasHTML}</tbody>
+      <tfoot>
+        <tr>
+          <td>PROMEDIO MENSUAL</td>
+          <td class="num">${fmtMon(datos.promedioOrdinario)}</td>
+          <td>${datos.promedioOtros>0?fmtMon(datos.promedioOtros):'—'}</td>
+          <td class="num">${fmtMon(datos.promedioTotal)}</td>
+        </tr>
+      </tfoot>
+    </table>
+
+    <p style="font-size:11px;color:#555;font-style:italic">El "Salario ordinario" corresponde al salario base por horas trabajadas. "Otros ingresos" incluye vacaciones canceladas y licencias con goce de salario o de maternidad cuando aplique.</p>`;
+
+  const fechaDoc = new Date();
+  const html = htmlConstanciaBase('Constancia Salarial', cuerpo, emp, fechaDoc);
+  const win = window.open('','_blank','width=900,height=750');
+  if (!win) { toast('Permitir ventanas emergentes','warn',5000); return; }
+  win.document.open(); win.document.write(html); win.document.close();
+
+  registrarEmisionConstancia({
+    tipo: 'Salarial',
+    empId, nombre: emp.nombre,
+    periodo: datos.periodoTexto,
+    fechaDoc: fechaDoc.toISOString().split('T')[0]
+  });
+}
+
+// ── Historial de emisiones ────────────────────────────────────────
+function registrarEmisionConstancia(data) {
+  const entrada = {
+    id: Date.now().toString(),
+    fecha: data.fechaDoc,
+    tipo: data.tipo,
+    empId: data.empId,
+    nombre: data.nombre,
+    periodo: data.periodo,
+    emitidoPor: 'Administrador'
+  };
+  constanciasEmitidas.unshift(entrada);
+  try { localStorage.setItem('planilla_constancias_emit', JSON.stringify(constanciasEmitidas)); } catch(e) {}
+  if (accessToken) guardarConstanciaEnSheets(entrada);
+  renderConstanciasHistorial();
+}
+
+async function guardarConstanciaEnSheets(e) {
+  try {
+    await sheetsAppend('Constancias_Log!A1', [[
+      e.fecha, e.tipo, e.empId, e.nombre, e.periodo, e.emitidoPor, e.id
+    ]]);
+  } catch(err) {
+    // Si la hoja no existe, intentar crearla y reintentar
+    if (String(err.message).includes('400') || String(err.message).includes('Unable to parse range')) {
+      try {
+        await crearHojaConstanciasLog();
+        await sheetsAppend('Constancias_Log!A1', [[
+          e.fecha, e.tipo, e.empId, e.nombre, e.periodo, e.emitidoPor, e.id
+        ]]);
+      } catch(err2) { console.warn('crearConstanciasLog:', err2.message); }
+    } else console.warn('guardarConstancia:', err.message);
+  }
+}
+
+async function crearHojaConstanciasLog() {
+  // Crear la hoja con batchUpdate addSheet
+  await sheetsReq('POST', ':batchUpdate', {
+    requests: [{ addSheet: { properties: { title: 'Constancias_Log' } } }]
+  });
+  // Escribir encabezado
+  await sheetsWrite('Constancias_Log!A1', [[
+    'Fecha Emisión','Tipo','ID Empleado','Nombre','Período','Emitido por','ID Registro'
+  ]]);
+}
+
+async function cargarConstanciasSheets() {
+  if (!accessToken) return;
+  try {
+    const d = await sheetsGet('Constancias_Log!A2:G1000');
+    const rows = d.values || [];
+    constanciasEmitidas = rows.filter(r => r[0]).map(r => ({
+      fecha: r[0]||'', tipo: r[1]||'', empId: String(r[2]||''),
+      nombre: r[3]||'', periodo: r[4]||'', emitidoPor: r[5]||'',
+      id: r[6]||String(Date.now())
+    }));
+    try { localStorage.setItem('planilla_constancias_emit', JSON.stringify(constanciasEmitidas)); } catch(e) {}
+  } catch(e) {
+    // Si no existe la hoja, la creamos vacía
+    if (String(e.message).includes('400')) {
+      try { await crearHojaConstanciasLog(); } catch(e2) {}
+    }
+  }
+}
+
+function renderConstanciasHistorial() {
+  const tbody = document.getElementById('cons-hist-tbody');
+  if (!tbody) return;
+  const filtro = document.getElementById('cons-hist-emp')?.value || '';
+  const lista = filtro ? constanciasEmitidas.filter(c => c.empId === filtro) : constanciasEmitidas;
+  tbody.innerHTML = lista.length ? lista.map(c => `<tr>
+    <td style="font-size:12px">${c.fecha||'—'}</td>
+    <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3)">${c.empId}</td>
+    <td style="font-weight:500;font-size:12px">${c.nombre}</td>
+    <td><span class="badge ${c.tipo==='Laboral'?'b-ef':'b-tr'}">${c.tipo}</span></td>
+    <td style="font-size:12px">${c.periodo||'—'}</td>
+    <td style="font-size:11px;color:var(--text3)">${c.emitidoPor||'—'}</td>
+  </tr>`).join('')
+  : '<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:2rem">Sin emisiones registradas</td></tr>';
+}
+
+function exportarConstanciasExcel() {
+  if (!constanciasEmitidas.length) { toast('Sin emisiones para exportar','warn'); return; }
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([
+    ['Fecha Emisión','Tipo','ID Empleado','Nombre','Período','Emitido por'],
+    ...constanciasEmitidas.map(c => [c.fecha, c.tipo, c.empId, c.nombre, c.periodo, c.emitidoPor])
+  ]);
+  ws['!cols'] = [{wch:14},{wch:12},{wch:8},{wch:30},{wch:30},{wch:18}];
+  XLSX.utils.book_append_sheet(wb, ws, 'Constancias');
+  XLSX.writeFile(wb, 'Constancias_Profecha.xlsx');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// RESTAURACIÓN DE ESTADO DESDE LOCALSTORAGE
+// Se ejecuta al final del script, cuando todas las variables ya existen.
+// Permite que la app funcione con datos del caché aunque el token de Google
+// haya expirado o no haya conexión a Sheets.
+// ══════════════════════════════════════════════════════════════════
 (function restaurarEstadoLocal(){
   try {
     const cfgSaved = localStorage.getItem('planilla_cfg');
@@ -3851,6 +4519,7 @@ function exportarIncExcel() {
     const r6=localStorage.getItem('planilla_empleados_cache');if(r6) empleados = JSON.parse(r6);
     const r7=localStorage.getItem('planilla_fechas_ingreso'); if(r7) FECHAS_INGRESO = JSON.parse(r7);
     const r8=localStorage.getItem('planilla_movimientos');    if(r8) movimientos = JSON.parse(r8);
+    const r9=localStorage.getItem('planilla_constancias_emit');if(r9) constanciasEmitidas = JSON.parse(r9);
   } catch(e) { console.warn('restaurarEstadoLocal:', e.message); }
 })();
 
