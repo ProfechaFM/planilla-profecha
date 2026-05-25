@@ -488,11 +488,15 @@ tr:hover td{background:var(--bg)}
         </div>
         <div class="fg">
           <label>Fecha inicio vacaciones</label>
-          <input type="date" id="vac-fecha-ini" class="edit-inp" oninput="actualizarPreviewVac()" onchange="actualizarPreviewVac()" style="width:100%">
+          <input type="date" id="vac-fecha-ini" class="edit-inp" oninput="actualizarPreviewVac();sugerirFechaPagoVac()" onchange="actualizarPreviewVac();sugerirFechaPagoVac()" style="width:100%">
         </div>
         <div class="fg">
           <label>Fecha fin vacaciones</label>
-          <input type="date" id="vac-fecha-fin" class="edit-inp" oninput="actualizarPreviewVac()" onchange="actualizarPreviewVac()" style="width:100%">
+          <input type="date" id="vac-fecha-fin" class="edit-inp" oninput="actualizarPreviewVac();sugerirFechaPagoVac()" onchange="actualizarPreviewVac();sugerirFechaPagoVac()" style="width:100%">
+        </div>
+        <div class="fg" id="vac-fecha-pago-wrap">
+          <label>Fecha de pago <span style="font-size:10px;color:var(--text3);font-weight:normal">(define en qué semana se paga)</span></label>
+          <input type="date" id="vac-fecha-pago" class="edit-inp" style="width:100%">
         </div>
         <div class="fg">
           <label>Días hábiles (calculado automáticamente)</label>
@@ -528,7 +532,7 @@ tr:hover td{background:var(--bg)}
         </div>
       </div>
       <div class="tab-wrap">
-        <table><thead><tr><th>Fecha</th><th>ID</th><th>Empleado</th><th>Período</th><th>Tipo</th><th>Fechas</th><th style="text-align:right">Días</th><th style="text-align:right">Monto</th><th>Pago</th><th>Acciones</th></tr></thead>
+        <table><thead><tr><th>Fecha</th><th>ID</th><th>Empleado</th><th>Período</th><th>Tipo</th><th>Fechas</th><th style="text-align:right">Días</th><th style="text-align:right">Monto</th><th>Pago</th><th>Sem. pago</th><th>Acciones</th></tr></thead>
         <tbody id="vac-hist-tbody"></tbody></table>
       </div>
     </div>
@@ -1150,6 +1154,13 @@ let editingEmp=null;
 document.getElementById('current-url').textContent=window.location.origin;
 
 function getWeekStart(d){const c=new Date(d);c.setHours(0,0,0,0);const day=c.getDay();c.setDate(c.getDate()-(day===0?6:day-1));return c;}
+function fechaToWeekKey(fechaStr){
+  // Convierte una fecha 'YYYY-MM-DD' al weekKey (lunes de esa semana, formato YYYY-MM-DD)
+  if(!fechaStr) return weekKey();
+  const d = new Date(fechaStr+'T12:00:00');
+  if(isNaN(d)) return weekKey();
+  return getWeekStart(d).toISOString().split('T')[0];
+}
 function addDays(d,n){const r=new Date(d);r.setDate(r.getDate()+n);return r;}
 function fmtDate(d){return d.toLocaleDateString('es-CR',{day:'2-digit',month:'short',year:'numeric'});}
 function fmtMon(n){return '₡'+Math.round(n).toLocaleString('es-CR');}
@@ -3014,6 +3025,17 @@ function poblarVacPeriodos(empId) {
 }
 
 
+function sugerirFechaPagoVac() {
+  // Auto-sugiere la fecha de pago como la fecha de inicio de las vacaciones,
+  // pero solo si el campo está vacío (no pisa lo que el usuario haya elegido)
+  const fechaPagoEl = document.getElementById('vac-fecha-pago');
+  if (!fechaPagoEl) return;
+  if (fechaPagoEl.value) return; // ya tiene valor, no tocar
+  const fechaIni = document.getElementById('vac-fecha-ini')?.value;
+  if (fechaIni) fechaPagoEl.value = fechaIni;
+}
+
+
 function actualizarPreviewVac() {
   const empId = document.getElementById('vac-emp')?.value;
   const tipo = document.getElementById('vac-tipo')?.value;
@@ -3085,6 +3107,7 @@ function registrarVacaciones() {
   const pago = document.getElementById('vac-pago')?.value || 'efectivo';
   const fechaIni = document.getElementById('vac-fecha-ini')?.value || '';
   const fechaFin = document.getElementById('vac-fecha-fin')?.value || '';
+  const fechaPago = document.getElementById('vac-fecha-pago')?.value || '';
   const nota = document.getElementById('vac-nota-reg')?.value || '';
   const periodoSel = document.getElementById('vac-periodo');
   const periodo = periodoSel?.value || '';
@@ -3094,6 +3117,13 @@ function registrarVacaciones() {
   if (!empId) { toast('Seleccioná un empleado', 'warn'); return; }
   if (!fechaIni) { toast('Ingresá la fecha de inicio', 'warn'); return; }
   if (!fechaFin) { toast('Ingresá la fecha de fin', 'warn'); return; }
+  // Solo validar fecha de pago si el tipo implica pago
+  if ((tipo === 'cancelada' || tipo === 'ambas') && !fechaPago) {
+    toast('Seleccioná la fecha de pago de las vacaciones', 'warn'); return;
+  }
+
+  // Semana en la que se aplica el pago (lunes de la semana donde cae fechaPago)
+  const semanaPago = fechaPago ? fechaToWeekKey(fechaPago) : weekKey();
 
   const dias = calcularDiasHabiles(fechaIni, fechaFin);
   if (!dias || dias < 1) { toast('Sin días hábiles en el rango seleccionado', 'warn'); return; }
@@ -3126,7 +3156,7 @@ function registrarVacaciones() {
       id: id+'_c', empId, nombre: emp.nombre, tipo: 'cancelada',
       dias, monto, pago, fecha: fechaHoy,
       fechaIni, fechaFin, periodo, periodoLabel, nota, grupoId: id,
-      semanaCalculo: weekKey()
+      semanaCalculo: semanaPago
     });
   }
 
@@ -3144,7 +3174,7 @@ function registrarVacaciones() {
   });
 
   renderVacSaldo();
-  ['vac-nota-reg','vac-fecha-ini','vac-fecha-fin'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['vac-nota-reg','vac-fecha-ini','vac-fecha-fin','vac-fecha-pago'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   const dd=document.getElementById('vac-dias-display');if(dd)dd.textContent='— días';
   const di=document.getElementById('vac-dias');if(di)di.value=0;
   const pv=document.getElementById('vac-preview');if(pv)pv.style.display='none';
@@ -3156,22 +3186,63 @@ function renderVacHistorial() {
   const filtroEmp = document.getElementById('vac-hist-emp')?.value || '';
   const registros = filtroEmp ? vacRegistros.filter(r => r.empId === filtroEmp) : vacRegistros;
   const tbody = document.getElementById('vac-hist-tbody');
-  tbody.innerHTML = registros.length ? registros.map(r => `<tr>
+  tbody.innerHTML = registros.length ? registros.map(r => {
+    const esCancelada = r.tipo === 'cancelada';
+    const semPagoTxt = esCancelada
+      ? (r.semanaCalculo
+          ? `<span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text2)">${r.semanaCalculo}</span>`
+          : '<span style="color:var(--warn);font-size:11px">sin asignar</span>')
+      : '<span style="color:var(--text3)">—</span>';
+    return `<tr>
     <td style="font-size:11px;color:var(--text3)">${r.fecha}</td>
     <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3)">${r.empId}</td>
     <td style="font-weight:500;font-size:12px">${r.nombre}</td>
     <td style="font-size:11px;color:var(--text3)">${r.periodoLabel||r.periodo||'—'}</td>
-    <td>${r.tipo === 'cancelada' ? '💰 Cancelada' : '🌴 Disfrutada'}</td>
+    <td>${esCancelada ? '💰 Cancelada' : '🌴 Disfrutada'}</td>
     <td style="font-size:11px;color:var(--text3)">${r.fechaIni||'—'} → ${r.fechaFin||'—'}</td>
     <td style="text-align:right;font-family:'DM Mono',monospace">${r.dias}</td>
     <td style="text-align:right;font-family:'DM Mono',monospace;color:var(--accent)">${r.monto>0?fmtMon(r.monto):'—'}</td>
     <td>${r.pago === 'transferencia' ? 'Transf' : r.pago === 'disfrutada' ? '—' : 'Efectivo'}</td>
+    <td>${semPagoTxt}</td>
     <td style="display:flex;gap:4px">
-      ${r.grupoId?`<button class="btn btn-s" style="font-size:10px;padding:2px 6px" onclick="reabrirConstanciaById('${r.grupoId}')">📄</button>`:''}
-      <button class="btn btn-d" style="font-size:10px;padding:2px 7px" onclick="eliminarVac('${r.id}')">✕</button>
+      ${esCancelada?`<button class="btn btn-s" style="font-size:10px;padding:2px 6px" onclick="editarSemanaPagoVac('${r.id}')" title="Editar semana de pago">✎</button>`:''}
+      ${r.grupoId?`<button class="btn btn-s" style="font-size:10px;padding:2px 6px" onclick="reabrirConstanciaById('${r.grupoId}')" title="Ver constancia">📄</button>`:''}
+      <button class="btn btn-d" style="font-size:10px;padding:2px 7px" onclick="eliminarVac('${r.id}')" title="Eliminar">✕</button>
     </td>
-  </tr>`).join('')
-  : '<tr><td colspan="10" style="text-align:center;color:var(--text3);padding:2rem">Sin registros</td></tr>';
+  </tr>`;
+  }).join('')
+  : '<tr><td colspan="11" style="text-align:center;color:var(--text3);padding:2rem">Sin registros</td></tr>';
+}
+
+function editarSemanaPagoVac(id) {
+  const r = vacRegistros.find(x => x.id === id);
+  if (!r) return;
+  if (r.tipo !== 'cancelada') {
+    toast('Solo las vacaciones canceladas tienen semana de pago', 'warn');
+    return;
+  }
+  const actual = r.semanaCalculo || '';
+  const nueva = prompt(
+    `Editar semana de pago para ${r.nombre}\n` +
+    `Concepto: ${r.dias} día${r.dias!==1?'s':''} · ${fmtMon(r.monto)}\n\n` +
+    `Ingresá la fecha de pago (cualquier día de la semana de pago).\n` +
+    `Formato: YYYY-MM-DD\n\n` +
+    `Actual: ${actual || 'sin asignar'}`,
+    actual
+  );
+  if (nueva === null) return; // canceló
+  const limpia = nueva.trim();
+  if (!limpia) { toast('Fecha vacía — no se actualizó', 'warn'); return; }
+  // Validar fecha
+  const d = new Date(limpia + 'T12:00:00');
+  if (isNaN(d.getTime())) { toast('Fecha inválida — usá formato YYYY-MM-DD', 'err'); return; }
+  // Calcular el lunes de esa semana
+  const nuevaSemana = fechaToWeekKey(limpia);
+  r.semanaCalculo = nuevaSemana;
+  try { localStorage.setItem('planilla_vac_registros', JSON.stringify(vacRegistros)); } catch(e) {}
+  if (accessToken) reescribirVacacionesSheets();
+  renderVacHistorial();
+  toast(`Semana de pago actualizada a ${nuevaSemana}`, 'ok');
 }
 
 function eliminarVac(id) {
