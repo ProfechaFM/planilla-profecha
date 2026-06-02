@@ -1813,8 +1813,10 @@ function renderComprobantes(){
       ${r.hExtra>0?`<div class="comp-row"><span>Horas extra (${r.hExtra.toFixed(2)} h × ${fmtMon(r.emp.horaBase*cfg.extra)})</span><span>${fmtMon(r.hExtra*r.emp.horaBase*cfg.extra)}</span></div>`:''}
       ${r.hDoble>0?`<div class="comp-row"><span>Horas dobles/feriado (${r.hDoble.toFixed(2)} h × ${fmtMon(r.emp.horaBase*cfg.doble)})</span><span>${fmtMon(r.hDoble*r.emp.horaBase*cfg.doble)}</span></div>`:''}
       ${r.hExtraDoble>0?`<div class="comp-row" style="color:var(--danger)"><span>Horas extra dobles/feriado (${r.hExtraDoble.toFixed(2)} h × ${fmtMon(r.emp.horaBase*cfg.extraDoble)})</span><span>${fmtMon(r.hExtraDoble*r.emp.horaBase*cfg.extraDoble)}</span></div>`:''}
-      ${r.hOrdinarioAcuerdo>0?`<div class="comp-row" style="color:#92400e;background:#fffbeb"><span>🔄 Acuerdo Ordinario (${r.hOrdinarioAcuerdo.toFixed(2)} h × ${fmtMon(r.emp.horaBase)})</span><span>${fmtMon(r.hOrdinarioAcuerdo*r.emp.horaBase)}</span></div>`:''}
-      ${r.hDobleAcuerdo>0?`<div class="comp-row" style="color:#065f46;background:#ecfdf5"><span>2× Acuerdo Doble (${r.hDobleAcuerdo.toFixed(2)} h × ${fmtMon(r.emp.horaBase*cfg.doble)})</span><span>${fmtMon(r.hDobleAcuerdo*r.emp.horaBase*cfg.doble)}</span></div>`:''}
+      ${r.hOrdinarioBaseAcuerdo>0?`<div class="comp-row" style="color:#92400e;background:#fffbeb"><span>🔄 Acuerdo Ordinario (${r.hOrdinarioBaseAcuerdo.toFixed(2)} h × ${fmtMon(r.emp.horaBase)})</span><span>${fmtMon(r.hOrdinarioBaseAcuerdo*r.emp.horaBase)}</span></div>`:''}
+      ${r.hOrdinarioExtraAcuerdo>0?`<div class="comp-row" style="color:#92400e;background:#fef3c7"><span>🔄 Extras del acuerdo Ordinario (${r.hOrdinarioExtraAcuerdo.toFixed(2)} h × ${fmtMon(r.emp.horaBase*cfg.extra)})</span><span>${fmtMon(r.hOrdinarioExtraAcuerdo*r.emp.horaBase*cfg.extra)}</span></div>`:''}
+      ${r.hDobleBaseAcuerdo>0?`<div class="comp-row" style="color:#065f46;background:#ecfdf5"><span>2× Acuerdo Doble (${r.hDobleBaseAcuerdo.toFixed(2)} h × ${fmtMon(r.emp.horaBase*cfg.doble)})</span><span>${fmtMon(r.hDobleBaseAcuerdo*r.emp.horaBase*cfg.doble)}</span></div>`:''}
+      ${r.hDobleExtraAcuerdo>0?`<div class="comp-row" style="color:#065f46;background:#d1fae5"><span>2× Extras del acuerdo Doble (${r.hDobleExtraAcuerdo.toFixed(2)} h × ${fmtMon(r.emp.horaBase*cfg.extraDoble)})</span><span>${fmtMon(r.hDobleExtraAcuerdo*r.emp.horaBase*cfg.extraDoble)}</span></div>`:''}
       ${r.descTotal>0?`<div class="comp-row"><span>Porción de descanso (${(r.isSplit?(r.hNorm+r.hDoble+(r.hOrdinarioAcuerdo||0)+(r.hDobleAcuerdo||0)):(r.hNorm+r.hExtra+r.hDoble+r.hExtraDoble+(r.hOrdinarioAcuerdo||0)+(r.hDobleAcuerdo||0))).toFixed(2)} h × ${fmtMon(r.emp.horaBase*(cfg.descH/cfg.descD))})</span><span>${fmtMon(r.descTotal)}</span></div>`:''}
       ${r.fijo>0?`<div class="comp-row"><span>Salario fijo / adicional</span><span>${fmtMon(r.fijo)}</span></div>`:''}
       <div class="comp-row" style="font-weight:600"><span>Salario bruto</span><span>${fmtMon(r.bruto)}</span></div>
@@ -1834,7 +1836,10 @@ function renderComprobantes(){
       ${r.acuerdosDelEmpleado&&r.acuerdosDelEmpleado.length?`<div style="margin-top:3px;padding:4px 6px;background:#f3f4f6;border-radius:4px;font-size:10px;border-left:3px solid #6b7280">${r.acuerdosDelEmpleado.map(a=>{
         const modoLbl=a.modo==='ordinario'?'🔄 Ordinario':'2× Doble';
         const diaNom=DIAS_NOMBRES[a.dia];
-        return `<strong>Acuerdo ${diaNom}:</strong> ${modoLbl} (${a.horas.toFixed(2)} h)${a.nota?' · '+a.nota:''}`;
+        const detHoras = a.hExtra>0
+          ? `${a.hBase.toFixed(2)} h base + ${a.hExtra.toFixed(2)} h extra`
+          : `${a.horas.toFixed(2)} h`;
+        return `<strong>Acuerdo ${diaNom}:</strong> ${modoLbl} (${detHoras})${a.nota?' · '+a.nota:''}`;
       }).join(' | ')}</div>`:''}
       <div class="comp-firma">
         <span>Pago: ${r.isSplit?'Mixto':r.emp.pago==='transferencia'?'Transferencia':'Efectivo'}</span>
@@ -2609,8 +2614,12 @@ function calcularEmpleado(empId,wData,cfg,feriados){
   const eh=wData[empId]||{};
   let hNorm=0,hExtra=0,hDoble=0,hExtraDoble=0,hFeriadoBase=0;
   // Horas con acuerdo especial — se contabilizan separadas para no afectar reglas semanales (48h, etc.)
-  let hOrdinarioAcuerdo=0;  // horas a tarifa base (modo 'ordinario')
-  let hDobleAcuerdo=0;      // horas a tarifa 2× (modo 'doble')
+  // Las primeras 8h del día del acuerdo van a la tarifa del modo.
+  // El exceso del día (>8h) se paga como extras (1.5×) en modo ordinario o extra-doble (3.5×) en modo doble.
+  let hOrdinarioAcuerdo=0;       // primeras 8h en modo 'ordinario' → tarifa base
+  let hOrdinarioExtraAcuerdo=0;  // horas >8h en modo 'ordinario' → tarifa extra (cfg.extra)
+  let hDobleAcuerdo=0;           // primeras 8h en modo 'doble' → tarifa 2×
+  let hDobleExtraAcuerdo=0;      // horas >8h en modo 'doble' → tarifa extra-doble (cfg.extraDoble)
   const acuerdosDelEmpleado=[]; // para mostrar en comprobante
   const wk=weekKey();
   for(let d=0;d<7;d++){
@@ -2622,12 +2631,16 @@ function calcularEmpleado(empId,wData,cfg,feriados){
     const keyAcuerdo=fechaDia+'_'+empId;
     const acuerdo=acuerdosEspeciales[keyAcuerdo];
     if(acuerdo){
+      const hBaseDia=Math.min(h,8);     // primeras 8h del día
+      const hExtraDia=Math.max(0,h-8);  // exceso del día (extras)
       if(acuerdo.modo==='ordinario'){
-        hOrdinarioAcuerdo+=h;
+        hOrdinarioAcuerdo+=hBaseDia;
+        hOrdinarioExtraAcuerdo+=hExtraDia;
       }else if(acuerdo.modo==='doble'){
-        hDobleAcuerdo+=h;
+        hDobleAcuerdo+=hBaseDia;
+        hDobleExtraAcuerdo+=hExtraDia;
       }
-      acuerdosDelEmpleado.push({dia:d,fecha:fechaDia,horas:h,modo:acuerdo.modo,nota:acuerdo.nota||''});
+      acuerdosDelEmpleado.push({dia:d,fecha:fechaDia,horas:h,hBase:hBaseDia,hExtra:hExtraDia,modo:acuerdo.modo,nota:acuerdo.nota||''});
       continue; // no contar este día en el cálculo normal
     }
     if(feriados[d]){const dobles=Math.min(h,8);hDoble+=dobles;hExtraDoble+=Math.max(0,h-8);hFeriadoBase+=dobles;}
@@ -2635,28 +2648,44 @@ function calcularEmpleado(empId,wData,cfg,feriados){
     else{hNorm+=h;}
   }
   if(cfg.extrasAcumulativas){const L=Math.max(0,48-hFeriadoBase);hExtra=Math.max(0,hNorm-L);hNorm=Math.min(hNorm,L);}
-  if(!emp)return{emp:null,empId,nombre:(eh.nombre||'ID '+empId),hNorm,hExtra,hDoble,hExtraDoble,hOrdinarioAcuerdo,hDobleAcuerdo,acuerdosDelEmpleado,descTotal:0,fijo:0,bruto:0,rebajoCC:0,neto:0,netoEf:0,netoTr:0,isSplit:false,sinPerfil:true};
+  // Totales agregados de acuerdo (para mantener compatibilidad con UI existente)
+  const hTotalOrdinarioAcuerdo=hOrdinarioAcuerdo+hOrdinarioExtraAcuerdo;
+  const hTotalDobleAcuerdo=hDobleAcuerdo+hDobleExtraAcuerdo;
+  if(!emp)return{emp:null,empId,nombre:(eh.nombre||'ID '+empId),hNorm,hExtra,hDoble,hExtraDoble,hOrdinarioAcuerdo:hTotalOrdinarioAcuerdo,hDobleAcuerdo:hTotalDobleAcuerdo,hOrdinarioBaseAcuerdo:hOrdinarioAcuerdo,hOrdinarioExtraAcuerdo,hDobleBaseAcuerdo:hDobleAcuerdo,hDobleExtraAcuerdo,acuerdosDelEmpleado,descTotal:0,fijo:0,bruto:0,rebajoCC:0,neto:0,netoEf:0,netoTr:0,isSplit:false,sinPerfil:true};
   const hBase=parseFloat(emp.horaBase)||0,fijo=parseFloat(emp.fijo)||0;
   const ccssX=emp.ccss==='X',isSplit=emp.nota==='split';
   const descUnit=ccssX?hBase*(cfg.descH/cfg.descD):0;
-  // Las horas con acuerdo SÍ generan porción de descanso (siguen siendo trabajo)
-  const hTotalDesc=isSplit?(hNorm+hDoble+hOrdinarioAcuerdo+hDobleAcuerdo):(hNorm+hExtra+hDoble+hExtraDoble+hOrdinarioAcuerdo+hDobleAcuerdo);
+  // Las horas con acuerdo SÍ generan porción de descanso (siguen siendo trabajo) — incluye base y extras
+  const hTotalDesc=isSplit
+    ?(hNorm+hDoble+hOrdinarioAcuerdo+hOrdinarioExtraAcuerdo+hDobleAcuerdo+hDobleExtraAcuerdo)
+    :(hNorm+hExtra+hDoble+hExtraDoble+hOrdinarioAcuerdo+hOrdinarioExtraAcuerdo+hDobleAcuerdo+hDobleExtraAcuerdo);
   const descTotal=hTotalDesc*descUnit;
-  // Monto extra por acuerdos
-  const montoOrdinarioAcuerdo=hOrdinarioAcuerdo*hBase;
-  const montoDobleAcuerdo=hDobleAcuerdo*hBase*cfg.doble;
-  const baseSalarial=hBase>0?(hNorm*hBase)+(hExtra*hBase*cfg.extra)+(hDoble*hBase*cfg.doble)+(hExtraDoble*hBase*cfg.extraDoble)+montoOrdinarioAcuerdo+montoDobleAcuerdo+descTotal:0;
+  // Montos por acuerdo: base + extras
+  const montoOrdinarioBase     =hOrdinarioAcuerdo*hBase;
+  const montoOrdinarioExtra    =hOrdinarioExtraAcuerdo*hBase*cfg.extra;
+  const montoDobleBase         =hDobleAcuerdo*hBase*cfg.doble;
+  const montoDobleExtra        =hDobleExtraAcuerdo*hBase*cfg.extraDoble;
+  const montoAcuerdoTotal      =montoOrdinarioBase+montoOrdinarioExtra+montoDobleBase+montoDobleExtra;
+  const baseSalarial=hBase>0?(hNorm*hBase)+(hExtra*hBase*cfg.extra)+(hDoble*hBase*cfg.doble)+(hExtraDoble*hBase*cfg.extraDoble)+montoAcuerdoTotal+descTotal:0;
   const rebajoCC=ccssX?baseSalarial*(cfg.ccss/100):0;
   const bruto=baseSalarial+fijo,neto=baseSalarial-rebajoCC+fijo;
   let netoEf=0,netoTr=0,rebajoCCSplit=0;
   if(isSplit){
-    // En Split: normales + dobles + acuerdos (ord/doble) van a transferencia. Solo extras van a efectivo.
-    const bT=(hNorm*hBase)+(hDoble*hBase*cfg.doble)+montoOrdinarioAcuerdo+montoDobleAcuerdo+descTotal;
+    // En Split: normales + dobles + TODOS los acuerdos (base y extras) van a transferencia.
+    // Solo extras normales van a efectivo.
+    const bT=(hNorm*hBase)+(hDoble*hBase*cfg.doble)+montoAcuerdoTotal+descTotal;
     const bE=(hExtra*hBase*cfg.extra)+(hExtraDoble*hBase*cfg.extraDoble);
     rebajoCCSplit=ccssX?bT*(cfg.ccss/100):0;netoTr=bT-rebajoCCSplit;netoEf=bE;
   }else if(emp.pago==='transferencia'){netoTr=neto;}else{netoEf=neto;}
   const rebajoEfectivo=isSplit?rebajoCCSplit:rebajoCC;
-  return{emp,empId,nombre:emp.nombre,hNorm,hExtra,hDoble,hExtraDoble,hOrdinarioAcuerdo,hDobleAcuerdo,acuerdosDelEmpleado,descTotal,fijo,bruto,rebajoCC:rebajoEfectivo,neto:netoTr+netoEf,netoEf,netoTr,isSplit,sinPerfil:false};
+  return{emp,empId,nombre:emp.nombre,hNorm,hExtra,hDoble,hExtraDoble,
+    // Campos heredados (suma base+extra para badges y comparaciones)
+    hOrdinarioAcuerdo:hTotalOrdinarioAcuerdo,hDobleAcuerdo:hTotalDobleAcuerdo,
+    // Desglose nuevo
+    hOrdinarioBaseAcuerdo:hOrdinarioAcuerdo,hOrdinarioExtraAcuerdo,
+    hDobleBaseAcuerdo:hDobleAcuerdo,hDobleExtraAcuerdo,
+    acuerdosDelEmpleado,descTotal,fijo,bruto,rebajoCC:rebajoEfectivo,
+    neto:netoTr+netoEf,netoEf,netoTr,isSplit,sinPerfil:false};
 }
 
 // ── recalcularSilencioso (uses unified engine) ───────────────────────
@@ -3751,59 +3780,92 @@ function generarConstanciaVacaciones(data) {
   const fmtF = f => f ? new Date(f+'T12:00:00').toLocaleDateString('es-CR',{day:'2-digit',month:'long',year:'numeric'}) : '___';
   const tipoTxt = tipo==='ambas'?'disfrutadas y canceladas':tipo==='disfrutada'?'disfrutadas':'canceladas';
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Constancia Vacaciones</title>
-<style>@page{margin:2cm}body{font-family:Arial,sans-serif;font-size:13px;color:#1a1917;line-height:1.6}
-.hdr{display:flex;align-items:center;gap:1.5rem;border-bottom:3px solid #2d5a3d;padding-bottom:1rem;margin-bottom:1.5rem}
-.logo{width:80px;height:80px;object-fit:contain;border-radius:8px}
-h1{margin:0;font-size:20px;color:#2d5a3d}p.sub{margin:2px 0;font-size:11px;color:#666}
-.titulo{text-align:center;font-size:16px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:1.5rem 0}
-.datos{background:#f5f4f0;border-radius:8px;padding:1rem;margin:1rem 0}
-.dato{display:flex;gap:1rem;margin-bottom:.4rem;font-size:12px}
-.lbl{color:#666;min-width:120px}.val{font-weight:600}
-.firmas{display:grid;grid-template-columns:1fr 1fr;gap:3rem;margin-top:3rem}
+<style>
+@page{size:letter;margin:3.3cm 2cm 2.3cm 2cm}
+*{box-sizing:border-box}
+body{font-family:Arial,sans-serif;font-size:12px;color:#1a1917;line-height:1.55;margin:0}
+.hdr{position:fixed;top:.5cm;left:2cm;right:2cm;display:flex;align-items:center;gap:1rem;border-bottom:2px solid #2d5a3d;padding-bottom:.5rem;background:#fff}
+.logo{width:65px;height:65px;object-fit:contain;border-radius:6px;flex-shrink:0}
+.hdr-info{flex:1;text-align:center}
+.hdr-info h1{margin:0;font-size:17px;color:#2d5a3d;letter-spacing:.5px}
+.hdr-info p{margin:1px 0;font-size:10px;color:#555}
+.hdr-info .nombre-comercial{font-size:11px;font-style:italic;color:#666;margin:1px 0}
+.pie{position:fixed;bottom:.4cm;left:2cm;right:2cm;padding-top:.4rem;border-top:1px solid #2d5a3d;font-size:9.5px;color:#666;text-align:center;background:#fff;line-height:1.4}
+.pie strong{color:#2d5a3d}
+.contenido{padding-top:.3rem}
+.titulo{text-align:center;font-size:16px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;margin:1rem 0 .7rem;color:#2d5a3d}
+.fecha-doc{text-align:right;font-size:11px;color:#666;margin-bottom:.6rem}
+.cuerpo{text-align:justify;margin:.6rem 0}
+.datos{background:#f5f4f0;border-radius:6px;padding:.7rem 1rem;margin:.7rem 0}
+.dato{display:flex;gap:1rem;margin-bottom:.25rem;font-size:11px}
+.dato:last-child{margin-bottom:0}
+.lbl{color:#666;min-width:110px}.val{font-weight:600}
+.firmas{display:grid;grid-template-columns:1fr 1fr;gap:2.5rem;margin-top:1.6rem}
 .firma-block{min-width:0}
-.firma-titulo{font-size:12px;font-weight:600;color:#333;margin-bottom:1.2rem;text-align:center;border-bottom:1px solid #2d5a3d;padding-bottom:.4rem}
-.firma-linea{margin-bottom:1.3rem;font-size:12px;display:flex;align-items:flex-end;gap:.4rem}
-.firma-linea .flbl{font-weight:600;color:#333;min-width:65px;flex-shrink:0}
+.firma-titulo{font-size:11.5px;font-weight:600;color:#333;margin-bottom:.9rem;text-align:center;border-bottom:1px solid #2d5a3d;padding-bottom:.3rem}
+/* Para el administrador (Atentamente): líneas vacías para llenar a mano */
+.firma-linea{margin-bottom:.85rem;font-size:11.5px;display:flex;align-items:flex-end;gap:.4rem}
+.firma-linea .flbl{font-weight:600;color:#333;min-width:60px;flex-shrink:0}
 .firma-linea .raya{flex:1;border-bottom:1px solid #333;height:1px;margin-bottom:3px}
+/* Para el colaborador: datos corridos sin línea (excepto la firma) */
+.dato-emp{margin-bottom:.85rem;font-size:11.5px;display:flex;gap:.4rem;align-items:baseline}
+.dato-emp .flbl{font-weight:600;color:#333;min-width:60px;flex-shrink:0}
+.dato-emp .vlr{color:#333}
+.barra-acciones{background:#2d5a3d;color:#fff;padding:.5rem 1rem;display:flex;gap:1rem;align-items:center;margin:1rem 2cm;border-radius:6px}
 @media print{
   .noprint{display:none !important}
   body{margin:0}
-}</style></head><body>
-<div class="noprint" style="background:#2d5a3d;color:#fff;padding:.5rem 1rem;display:flex;gap:1rem;align-items:center;margin-bottom:1rem">
-<span>Constancia lista</span>
-<button onclick="window.print()" style="background:#fff;color:#2d5a3d;border:none;padding:5px 14px;border-radius:5px;font-weight:600;cursor:pointer">🖨 Imprimir / Descargar PDF</button>
-<button onclick="window.close()" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.4);padding:5px 12px;border-radius:5px;cursor:pointer">Cerrar</button></div>
-<div class="hdr"><img class="logo" src="https://media-cdn.tripadvisor.com/media/photo-s/04/a0/da/cc/la-fiesta-del-maiz.jpg" onerror="this.style.display='none'">
-<div><h1>Restaurante La Fiesta de Maíz</h1><p class="sub">Profecha S.A. &middot; Costa Rica</p><p class="sub">Planilla y Recursos Humanos</p></div></div>
-<div class="titulo">Constancia de Vacaciones</div>
-<p style="text-align:right;font-size:12px;color:#666">${fechaDocFmt}</p>
-<p>Por medio de la presente se hace constar que <strong>${emp.nombre}</strong>, cédula <strong>${emp.cedula||'_________'}</strong>, puesto <strong>${emp.puesto||'_________'}</strong>, gozó de vacaciones <strong>${tipoTxt}</strong> correspondientes al período <strong>${periodo}</strong>.</p>
-<div class="datos">
-  <div class="dato"><span class="lbl">Período laboral:</span><span class="val">${periodo}</span></div>
-  <div class="dato"><span class="lbl">Días:</span><span class="val">${dias} días</span></div>
-  <div class="dato"><span class="lbl">Desde:</span><span class="val">${fmtF(fechaIni)}</span></div>
-  <div class="dato"><span class="lbl">Hasta:</span><span class="val">${fmtF(fechaFin)}</span></div>
-  <div class="dato"><span class="lbl">Tipo:</span><span class="val">${tipoTxt.charAt(0).toUpperCase()+tipoTxt.slice(1)}</span></div>
-  ${tipo!=='disfrutada'?`<div class="dato"><span class="lbl">Monto:</span><span class="val">${fmtMon(monto)} (${pago==='transferencia'?'transferencia':'efectivo'})</span></div>`:''}
+  .hdr,.pie{position:fixed}
+}
+</style></head><body>
+<div class="barra-acciones noprint">
+  <span style="flex:1">Constancia lista</span>
+  <button onclick="window.print()" style="background:#fff;color:#2d5a3d;border:none;padding:5px 14px;border-radius:5px;font-weight:600;cursor:pointer">🖨 Imprimir / Descargar PDF</button>
+  <button onclick="window.close()" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.4);padding:5px 12px;border-radius:5px;cursor:pointer">Cerrar</button>
 </div>
-<p style="font-size:12px">La relación laboral se mantuvo vigente durante este período, conforme al Código de Trabajo de Costa Rica.</p>
-<div class="firmas">
-  <div class="firma-block">
-    <div class="firma-titulo">Atentamente</div>
-    <div class="firma-linea"><span class="flbl">Nombre:</span><span class="raya"></span></div>
-    <div class="firma-linea"><span class="flbl">Puesto:</span><span class="raya"></span></div>
-    <div class="firma-linea"><span class="flbl">Cédula:</span><span class="raya"></span></div>
-    <div class="firma-linea"><span class="flbl">Firma:</span><span class="raya"></span></div>
+<div class="hdr">
+  <img class="logo" src="${LOGO_URL}" onerror="this.style.display='none'">
+  <div class="hdr-info">
+    <h1>PROFECHA S.A.</h1>
+    <p class="nombre-comercial">Restaurante La Fiesta de Maíz</p>
+    <p><strong>Cédula Jurídica:</strong> 3-101-173484</p>
   </div>
-  <div class="firma-block">
-    <div class="firma-titulo">Recibido por el colaborador</div>
-    <div class="firma-linea"><span class="flbl">Nombre:</span><span class="raya"></span><span style="font-size:11px;color:#888;margin-left:4px">${emp.nombre}</span></div>
-    <div class="firma-linea"><span class="flbl">Cédula:</span><span class="raya"></span><span style="font-size:11px;color:#888;margin-left:4px">${emp.cedula||''}</span></div>
-    <div class="firma-linea"><span class="flbl">Fecha:</span><span class="raya"></span></div>
-    <div class="firma-linea"><span class="flbl">Firma:</span><span class="raya"></span></div>
-  </div>
+  <div style="width:65px"></div>
 </div>
-<p style="font-size:10px;color:#aaa;text-align:right;margin-top:2rem">Ref: ${grupoId}</p>
+<div class="pie">
+  <strong>Teléfono:</strong> (506) 2487-5757 &nbsp;·&nbsp; Contiguo a la Iglesia Católica de La Garita, Alajuela, Alajuela
+</div>
+<div class="contenido">
+  <div class="fecha-doc">Alajuela, ${fechaDocFmt}</div>
+  <div class="titulo">Constancia de Vacaciones</div>
+  <p>Por medio de la presente se hace constar que <strong>${emp.nombre}</strong>, cédula <strong>${emp.cedula||'_________'}</strong>, puesto <strong>${emp.puesto||'_________'}</strong>, gozó de vacaciones <strong>${tipoTxt}</strong> correspondientes al período <strong>${periodo}</strong>.</p>
+  <div class="datos">
+    <div class="dato"><span class="lbl">Período laboral:</span><span class="val">${periodo}</span></div>
+    <div class="dato"><span class="lbl">Días:</span><span class="val">${dias} día${dias!==1?'s':''}</span></div>
+    <div class="dato"><span class="lbl">Desde:</span><span class="val">${fmtF(fechaIni)}</span></div>
+    <div class="dato"><span class="lbl">Hasta:</span><span class="val">${fmtF(fechaFin)}</span></div>
+    <div class="dato"><span class="lbl">Tipo:</span><span class="val">${tipoTxt.charAt(0).toUpperCase()+tipoTxt.slice(1)}</span></div>
+    ${tipo!=='disfrutada'?`<div class="dato"><span class="lbl">Monto:</span><span class="val">${fmtMon(monto)} (${pago==='transferencia'?'transferencia':'efectivo'})</span></div>`:''}
+  </div>
+  <p style="font-size:11px">La relación laboral se mantuvo vigente durante este período, conforme al Código de Trabajo de Costa Rica.</p>
+  <div class="firmas">
+    <div class="firma-block">
+      <div class="firma-titulo">Atentamente</div>
+      <div class="firma-linea"><span class="flbl">Nombre:</span><span class="raya"></span></div>
+      <div class="firma-linea"><span class="flbl">Puesto:</span><span class="raya"></span></div>
+      <div class="firma-linea"><span class="flbl">Cédula:</span><span class="raya"></span></div>
+      <div class="firma-linea"><span class="flbl">Firma:</span><span class="raya"></span></div>
+    </div>
+    <div class="firma-block">
+      <div class="firma-titulo">Recibido por el colaborador</div>
+      <div class="dato-emp"><span class="flbl">Nombre:</span><span class="vlr">${emp.nombre}</span></div>
+      <div class="dato-emp"><span class="flbl">Cédula:</span><span class="vlr">${emp.cedula||'—'}</span></div>
+      <div class="dato-emp"><span class="flbl">Fecha:</span><span class="vlr">${fechaDocFmt}</span></div>
+      <div class="firma-linea"><span class="flbl">Firma:</span><span class="raya"></span></div>
+    </div>
+  </div>
+  <p style="font-size:9px;color:#aaa;text-align:right;margin-top:1rem">Ref: ${grupoId}</p>
+</div>
 <script>window.focus();<\/script></body></html>`;
   try { localStorage.setItem('planilla_ultima_constancia_'+grupoId, html); localStorage.setItem('planilla_ultima_constancia_id', grupoId); } catch(e) {}
   const win = window.open('','_blank','width=850,height=700');
@@ -4412,48 +4474,47 @@ function htmlConstanciaBase(titulo, cuerpoHTML, emp, fechaDoc) {
 <style>
 @page{
   size:letter;
-  margin:3.2cm 2cm 2.5cm 2cm;
+  margin:3.3cm 2cm 2.3cm 2cm;
 }
 *{box-sizing:border-box}
-body{font-family:Arial,sans-serif;font-size:13px;color:#1a1917;line-height:1.7;margin:0}
+body{font-family:Arial,sans-serif;font-size:12px;color:#1a1917;line-height:1.6;margin:0}
 /* Encabezado y pie: position fixed para que se repitan en cada página al imprimir */
 .hdr{
   position:fixed;top:.5cm;left:2cm;right:2cm;
-  display:flex;align-items:center;gap:1.2rem;
-  border-bottom:3px solid #2d5a3d;padding-bottom:.6rem;
+  display:flex;align-items:center;gap:1rem;
+  border-bottom:2px solid #2d5a3d;padding-bottom:.5rem;
   background:#fff;
 }
-.logo{width:75px;height:75px;object-fit:contain;border-radius:8px;flex-shrink:0}
-.hdr-info h1{margin:0;font-size:19px;color:#2d5a3d}
+.logo{width:65px;height:65px;object-fit:contain;border-radius:6px;flex-shrink:0}
+.hdr-info{flex:1;text-align:center}
+.hdr-info h1{margin:0;font-size:17px;color:#2d5a3d;letter-spacing:.5px}
 .hdr-info p{margin:1px 0;font-size:10px;color:#555}
-.hdr-info .nombre-comercial{font-size:11px;font-style:italic;color:#666}
+.hdr-info .nombre-comercial{font-size:11px;font-style:italic;color:#666;margin:1px 0}
 .pie{
-  position:fixed;bottom:.5cm;left:2cm;right:2cm;
-  padding-top:.5rem;border-top:1px solid #ccc;
-  font-size:10px;color:#888;text-align:center;background:#fff;
+  position:fixed;bottom:.4cm;left:2cm;right:2cm;
+  padding-top:.4rem;border-top:1px solid #2d5a3d;
+  font-size:9.5px;color:#666;text-align:center;background:#fff;line-height:1.4;
 }
-/* Espacio que dejamos para que hdr/pie no se solapen con el contenido en navegador */
-.contenido{padding-top:.5rem}
-.titulo{text-align:center;font-size:18px;font-weight:700;text-transform:uppercase;letter-spacing:2px;margin:1.5rem 0 1.2rem;color:#2d5a3d}
-.fecha-doc{text-align:right;font-size:12px;color:#666;margin-bottom:1rem}
-.cuerpo{text-align:justify;margin:1rem 0}
-.cuerpo p{margin:0.8rem 0}
-.tabla-ingresos{width:100%;border-collapse:collapse;margin:1rem 0;font-size:12px}
-.tabla-ingresos th{background:#2d5a3d;color:#fff;padding:8px;text-align:left;font-weight:600}
-.tabla-ingresos td{padding:7px 8px;border-bottom:1px solid #e0e0e0}
+.pie strong{color:#2d5a3d}
+.contenido{padding-top:.3rem}
+.titulo{text-align:center;font-size:16px;font-weight:700;text-transform:uppercase;letter-spacing:2px;margin:1rem 0 .8rem;color:#2d5a3d}
+.fecha-doc{text-align:right;font-size:11px;color:#666;margin-bottom:.6rem}
+.cuerpo{text-align:justify;margin:.6rem 0}
+.cuerpo p{margin:.5rem 0}
+.tabla-ingresos{width:100%;border-collapse:collapse;margin:.7rem 0;font-size:11px}
+.tabla-ingresos th{background:#2d5a3d;color:#fff;padding:5px 6px;text-align:left;font-weight:600;font-size:10.5px}
+.tabla-ingresos td{padding:4px 6px;border-bottom:1px solid #e0e0e0;font-size:10.5px}
 .tabla-ingresos .num{text-align:right;font-family:'Courier New',monospace}
 .tabla-ingresos tfoot td{background:#f5f4f0;font-weight:700;border-top:2px solid #2d5a3d;border-bottom:none}
-.cierre{margin-top:1.5rem;text-align:justify}
-/* Firmas: alineadas a la izquierda, rayas cortas */
-.firmas{margin-top:3rem}
-.firma-linea{margin-bottom:1.2rem;font-size:13px;display:flex;align-items:flex-end;gap:.5rem;max-width:380px}
-.firma-linea .lbl{font-weight:600;color:#333;min-width:70px;flex-shrink:0}
+.cierre{margin-top:.8rem;text-align:justify}
+/* Firmas: alineadas a la izquierda, líneas vacías para llenar a mano */
+.firmas{margin-top:1.8rem}
+.firma-linea{margin-bottom:.9rem;font-size:12px;display:flex;align-items:flex-end;gap:.5rem;max-width:340px}
+.firma-linea .lbl{font-weight:600;color:#333;min-width:65px;flex-shrink:0}
 .firma-linea .raya{flex:1;border-bottom:1px solid #333;height:1px;margin-bottom:3px}
-/* Barra superior visible en navegador, oculta al imprimir */
 .barra-acciones{background:#2d5a3d;color:#fff;padding:.6rem 1rem;display:flex;gap:1rem;align-items:center;margin:1rem 2cm;border-radius:6px}
 @media print{
   .noprint{display:none !important}
-  /* Asegura que body no agregue margin extra; el espacio lo da @page */
   body{margin:0}
   .hdr, .pie{position:fixed}
 }
@@ -4469,11 +4530,11 @@ body{font-family:Arial,sans-serif;font-size:13px;color:#1a1917;line-height:1.7;m
     <h1>${EMPRESA.nombre}</h1>
     <p class="nombre-comercial">${EMPRESA.nombreComercial}</p>
     <p><strong>Cédula Jurídica:</strong> ${EMPRESA.cedJuridica}</p>
-    <p>${EMPRESA.direccion}</p>
   </div>
+  <div style="width:65px"></div>
 </div>
 <div class="pie">
-  ${EMPRESA.nombre} · ${EMPRESA.cedJuridica} · ${EMPRESA.direccion}
+  <strong>Teléfono:</strong> (506) 2487-5757 &nbsp;·&nbsp; ${EMPRESA.direccion}
 </div>
 <div class="contenido">
   <div class="fecha-doc">Alajuela, ${fechaDocFmt}</div>
