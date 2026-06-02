@@ -3783,17 +3783,23 @@ function generarConstanciaVacaciones(data) {
 <style>
 @page{size:letter;margin:3.3cm 2cm 2.3cm 2cm}
 *{box-sizing:border-box}
-body{font-family:Arial,sans-serif;font-size:12px;color:#1a1917;line-height:1.55;margin:0}
-.hdr{position:fixed;top:.5cm;left:2cm;right:2cm;display:flex;align-items:center;gap:1rem;border-bottom:2px solid #2d5a3d;padding-bottom:.5rem;background:#fff}
+html,body{margin:0;padding:0}
+body{font-family:Arial,sans-serif;font-size:12px;color:#1a1917;line-height:1.55}
+/* Barra de acciones — solo en pantalla, oculta al imprimir */
+.barra-acciones{position:sticky;top:0;z-index:1000;background:#2d5a3d;color:#fff;padding:.6rem 1rem;display:flex;gap:1rem;align-items:center;border-bottom:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.barra-acciones button{font-family:inherit;font-size:13px}
+/* Wrapper del documento — simula la página letter en pantalla */
+.documento{max-width:21.5cm;margin:0 auto;background:#fff;padding:3.3cm 2cm 2.3cm 2cm;position:relative;min-height:27.9cm}
+/* Encabezado del documento */
+.hdr{display:flex;align-items:center;gap:1rem;border-bottom:2px solid #2d5a3d;padding-bottom:.5rem;margin-bottom:1rem}
 .logo{width:65px;height:65px;object-fit:contain;border-radius:6px;flex-shrink:0}
 .hdr-info{flex:1;text-align:center}
 .hdr-info h1{margin:0;font-size:17px;color:#2d5a3d;letter-spacing:.5px}
 .hdr-info p{margin:1px 0;font-size:10px;color:#555}
 .hdr-info .nombre-comercial{font-size:11px;font-style:italic;color:#666;margin:1px 0}
-.pie{position:fixed;bottom:.4cm;left:2cm;right:2cm;padding-top:.4rem;border-top:1px solid #2d5a3d;font-size:9.5px;color:#666;text-align:center;background:#fff;line-height:1.4}
+.pie{margin-top:1.5rem;padding-top:.5rem;border-top:1px solid #2d5a3d;font-size:9.5px;color:#666;text-align:center;line-height:1.4}
 .pie strong{color:#2d5a3d}
-.contenido{padding-top:.3rem}
-.titulo{text-align:center;font-size:16px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;margin:1rem 0 .7rem;color:#2d5a3d}
+.titulo{text-align:center;font-size:16px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;margin:.8rem 0 .7rem;color:#2d5a3d}
 .fecha-doc{text-align:right;font-size:11px;color:#666;margin-bottom:.6rem}
 .cuerpo{text-align:justify;margin:.6rem 0}
 .datos{background:#f5f4f0;border-radius:6px;padding:.7rem 1rem;margin:.7rem 0}
@@ -3803,43 +3809,37 @@ body{font-family:Arial,sans-serif;font-size:12px;color:#1a1917;line-height:1.55;
 .firmas{display:grid;grid-template-columns:1fr 1fr;gap:2.5rem;margin-top:1.6rem}
 .firma-block{min-width:0}
 .firma-titulo{font-size:11.5px;font-weight:600;color:#333;margin-bottom:.9rem;text-align:center;border-bottom:1px solid #2d5a3d;padding-bottom:.3rem}
-/* Para el administrador (Atentamente): líneas vacías para llenar a mano */
 .firma-linea{margin-bottom:.85rem;font-size:11.5px;display:flex;align-items:flex-end;gap:.4rem}
 .firma-linea .flbl{font-weight:600;color:#333;min-width:60px;flex-shrink:0}
 .firma-linea .raya{flex:1;border-bottom:1px solid #333;height:1px;margin-bottom:3px}
-/* Para el colaborador: datos corridos sin línea (excepto la firma) */
 .dato-emp{margin-bottom:.85rem;font-size:11.5px;display:flex;gap:.4rem;align-items:baseline}
 .dato-emp .flbl{font-weight:600;color:#333;min-width:60px;flex-shrink:0}
 .dato-emp .vlr{color:#333}
-.barra-acciones{position:fixed;top:0;left:0;right:0;z-index:100;background:#2d5a3d;color:#fff;padding:.5rem 1rem;display:flex;gap:1rem;align-items:center;border-bottom:1px solid #fff}
-@media screen{
-  .hdr{top:3.5cm !important}
-  .contenido{padding-top:3cm}
-}
 @media print{
   .noprint{display:none !important}
-  body{margin:0}
-  .hdr,.pie{position:fixed}
+  .documento{max-width:none;margin:0;padding:0;min-height:0;box-shadow:none}
+  body{background:#fff}
+}
+@media screen{
+  body{background:#e5e5e5;padding-bottom:2rem}
+  .documento{box-shadow:0 4px 20px rgba(0,0,0,.1);margin-top:1.5rem}
 }
 </style></head><body>
 <div class="barra-acciones noprint">
-  <span style="flex:1">Constancia lista</span>
-  <button onclick="window.print()" style="background:#fff;color:#2d5a3d;border:none;padding:5px 14px;border-radius:5px;font-weight:600;cursor:pointer">🖨 Imprimir / Descargar PDF</button>
-  <button onclick="window.close()" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.4);padding:5px 12px;border-radius:5px;cursor:pointer">Cerrar</button>
+  <span style="flex:1">Constancia lista para imprimir o descargar como PDF</span>
+  <button onclick="window.print()" style="background:#fff;color:#2d5a3d;border:none;padding:6px 16px;border-radius:5px;font-weight:600;cursor:pointer">🖨 Imprimir / Guardar PDF</button>
+  <button onclick="window.close()" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.4);padding:6px 14px;border-radius:5px;cursor:pointer">Cerrar</button>
 </div>
-<div class="hdr">
-  <img class="logo" src="${LOGO_URL}" onerror="this.style.display='none'">
-  <div class="hdr-info">
-    <h1>PROFECHA S.A.</h1>
-    <p class="nombre-comercial">Restaurante La Fiesta de Maíz</p>
-    <p><strong>Cédula Jurídica:</strong> 3-101-173484</p>
+<div class="documento">
+  <div class="hdr">
+    <img class="logo" src="${LOGO_URL}" onerror="this.style.display='none'">
+    <div class="hdr-info">
+      <h1>PROFECHA S.A.</h1>
+      <p class="nombre-comercial">Restaurante La Fiesta de Maíz</p>
+      <p><strong>Cédula Jurídica:</strong> 3-101-173484</p>
+    </div>
+    <div style="width:65px"></div>
   </div>
-  <div style="width:65px"></div>
-</div>
-<div class="pie">
-  <strong>Teléfono:</strong> (506) 2487-5757 &nbsp;·&nbsp; Contiguo a la Iglesia Católica de La Garita, Alajuela, Alajuela
-</div>
-<div class="contenido">
   <div class="fecha-doc">Alajuela, ${fechaDocFmt}</div>
   <div class="titulo">Constancia de Vacaciones</div>
   <p>Por medio de la presente se hace constar que <strong>${emp.nombre}</strong>, cédula <strong>${emp.cedula||'_________'}</strong>, puesto <strong>${emp.puesto||'_________'}</strong>, gozó de vacaciones <strong>${tipoTxt}</strong> correspondientes al período <strong>${periodo}</strong>.</p>
@@ -3869,6 +3869,9 @@ body{font-family:Arial,sans-serif;font-size:12px;color:#1a1917;line-height:1.55;
     </div>
   </div>
   <p style="font-size:9px;color:#aaa;text-align:right;margin-top:1rem">Ref: ${grupoId}</p>
+  <div class="pie">
+    <strong>Teléfono:</strong> (506) 2487-5757 &nbsp;·&nbsp; Contiguo a la Iglesia Católica de La Garita, Alajuela, Alajuela
+  </div>
 </div>
 <script>window.focus();<\/script></body></html>`;
   try { localStorage.setItem('planilla_ultima_constancia_'+grupoId, html); localStorage.setItem('planilla_ultima_constancia_id', grupoId); } catch(e) {}
@@ -4476,32 +4479,22 @@ function htmlConstanciaBase(titulo, cuerpoHTML, emp, fechaDoc) {
   const anioFmt = fechaDoc.getFullYear();
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${titulo}</title>
 <style>
-@page{
-  size:letter;
-  margin:3.3cm 2cm 2.3cm 2cm;
-}
+@page{size:letter;margin:3.3cm 2cm 2.3cm 2cm}
 *{box-sizing:border-box}
-body{font-family:Arial,sans-serif;font-size:12px;color:#1a1917;line-height:1.6;margin:0}
-/* Encabezado y pie: position fixed para que se repitan en cada página al imprimir */
-.hdr{
-  position:fixed;top:.5cm;left:2cm;right:2cm;
-  display:flex;align-items:center;gap:1rem;
-  border-bottom:2px solid #2d5a3d;padding-bottom:.5rem;
-  background:#fff;
-}
+html,body{margin:0;padding:0}
+body{font-family:Arial,sans-serif;font-size:12px;color:#1a1917;line-height:1.6}
+.barra-acciones{position:sticky;top:0;z-index:1000;background:#2d5a3d;color:#fff;padding:.6rem 1rem;display:flex;gap:1rem;align-items:center;border-bottom:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.barra-acciones button{font-family:inherit;font-size:13px}
+.documento{max-width:21.5cm;margin:0 auto;background:#fff;padding:3.3cm 2cm 2.3cm 2cm;position:relative;min-height:27.9cm}
+.hdr{display:flex;align-items:center;gap:1rem;border-bottom:2px solid #2d5a3d;padding-bottom:.5rem;margin-bottom:1rem}
 .logo{width:65px;height:65px;object-fit:contain;border-radius:6px;flex-shrink:0}
 .hdr-info{flex:1;text-align:center}
 .hdr-info h1{margin:0;font-size:17px;color:#2d5a3d;letter-spacing:.5px}
 .hdr-info p{margin:1px 0;font-size:10px;color:#555}
 .hdr-info .nombre-comercial{font-size:11px;font-style:italic;color:#666;margin:1px 0}
-.pie{
-  position:fixed;bottom:.4cm;left:2cm;right:2cm;
-  padding-top:.4rem;border-top:1px solid #2d5a3d;
-  font-size:9.5px;color:#666;text-align:center;background:#fff;line-height:1.4;
-}
+.pie{margin-top:1.5rem;padding-top:.5rem;border-top:1px solid #2d5a3d;font-size:9.5px;color:#666;text-align:center;line-height:1.4}
 .pie strong{color:#2d5a3d}
-.contenido{padding-top:.3rem}
-.titulo{text-align:center;font-size:16px;font-weight:700;text-transform:uppercase;letter-spacing:2px;margin:1rem 0 .8rem;color:#2d5a3d}
+.titulo{text-align:center;font-size:16px;font-weight:700;text-transform:uppercase;letter-spacing:2px;margin:.9rem 0 .8rem;color:#2d5a3d}
 .fecha-doc{text-align:right;font-size:11px;color:#666;margin-bottom:.6rem}
 .cuerpo{text-align:justify;margin:.6rem 0}
 .cuerpo p{margin:.5rem 0}
@@ -4511,20 +4504,18 @@ body{font-family:Arial,sans-serif;font-size:12px;color:#1a1917;line-height:1.6;m
 .tabla-ingresos .num{text-align:right;font-family:'Courier New',monospace}
 .tabla-ingresos tfoot td{background:#f5f4f0;font-weight:700;border-top:2px solid #2d5a3d;border-bottom:none}
 .cierre{margin-top:.8rem;text-align:justify}
-/* Firmas: alineadas a la izquierda, líneas vacías para llenar a mano */
 .firmas{margin-top:1.8rem}
 .firma-linea{margin-bottom:.9rem;font-size:12px;display:flex;align-items:flex-end;gap:.5rem;max-width:340px}
 .firma-linea .lbl{font-weight:600;color:#333;min-width:65px;flex-shrink:0}
 .firma-linea .raya{flex:1;border-bottom:1px solid #333;height:1px;margin-bottom:3px}
-.barra-acciones{position:fixed;top:0;left:0;right:0;z-index:100;background:#2d5a3d;color:#fff;padding:.6rem 1rem;display:flex;gap:1rem;align-items:center;border-bottom:1px solid #fff}
-@media screen{
-  .hdr{top:3.5cm !important}
-  .contenido{padding-top:3cm}
-}
 @media print{
   .noprint{display:none !important}
-  body{margin:0}
-  .hdr, .pie{position:fixed}
+  .documento{max-width:none;margin:0;padding:0;min-height:0;box-shadow:none}
+  body{background:#fff}
+}
+@media screen{
+  body{background:#e5e5e5;padding-bottom:2rem}
+  .documento{box-shadow:0 4px 20px rgba(0,0,0,.1);margin-top:1.5rem}
 }
 </style></head><body>
 <div class="barra-acciones noprint">
@@ -4532,19 +4523,16 @@ body{font-family:Arial,sans-serif;font-size:12px;color:#1a1917;line-height:1.6;m
   <button onclick="window.print()" style="background:#fff;color:#2d5a3d;border:none;padding:6px 16px;border-radius:5px;font-weight:600;cursor:pointer">🖨 Imprimir / Guardar PDF</button>
   <button onclick="window.close()" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.4);padding:6px 14px;border-radius:5px;cursor:pointer">Cerrar</button>
 </div>
-<div class="hdr">
-  <img class="logo" src="${LOGO_URL}" onerror="this.style.display='none'">
-  <div class="hdr-info">
-    <h1>${EMPRESA.nombre}</h1>
-    <p class="nombre-comercial">${EMPRESA.nombreComercial}</p>
-    <p><strong>Cédula Jurídica:</strong> ${EMPRESA.cedJuridica}</p>
+<div class="documento">
+  <div class="hdr">
+    <img class="logo" src="${LOGO_URL}" onerror="this.style.display='none'">
+    <div class="hdr-info">
+      <h1>${EMPRESA.nombre}</h1>
+      <p class="nombre-comercial">${EMPRESA.nombreComercial}</p>
+      <p><strong>Cédula Jurídica:</strong> ${EMPRESA.cedJuridica}</p>
+    </div>
+    <div style="width:65px"></div>
   </div>
-  <div style="width:65px"></div>
-</div>
-<div class="pie">
-  <strong>Teléfono:</strong> (506) 2487-5757 &nbsp;·&nbsp; ${EMPRESA.direccion}
-</div>
-<div class="contenido">
   <div class="fecha-doc">Alajuela, ${fechaDocFmt}</div>
   <div class="titulo">${titulo}</div>
   <div class="cuerpo">${cuerpoHTML}</div>
@@ -4556,6 +4544,9 @@ body{font-family:Arial,sans-serif;font-size:12px;color:#1a1917;line-height:1.6;m
     <div class="firma-linea"><span class="lbl">Puesto:</span><span class="raya"></span></div>
     <div class="firma-linea"><span class="lbl">Cédula:</span><span class="raya"></span></div>
     <div class="firma-linea"><span class="lbl">Firma:</span><span class="raya"></span></div>
+  </div>
+  <div class="pie">
+    <strong>Teléfono:</strong> (506) 2487-5757 &nbsp;·&nbsp; ${EMPRESA.direccion}
   </div>
 </div>
 <script>window.focus();<\/script>
